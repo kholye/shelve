@@ -47,7 +47,7 @@ Changes apply at once.
 ## Limitations
 
 - Windows 10 and 11 only.
-- Tried on one monitor. With several monitors the border between two of them also counts as a screen edge, and on monitors with different scaling the shelf may come out the wrong size.
+- Tried on one monitor. With several monitors the border between two of them is not a screen edge: an edge that has another monitor next to it, even along part of its height, does not open the shelf. On monitors with different scaling the shelf may come out the wrong size.
 - The exe is not signed, hence the SmartScreen warning.
 - About 55 MB of memory after start; see below for where it goes.
 - Windows does not allow drag and drop between a normal program and one running as administrator. If Shelve runs without administrator rights, files cannot go from such a window to the shelf or back.

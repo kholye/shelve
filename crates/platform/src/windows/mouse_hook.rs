@@ -8,11 +8,14 @@ use std::io;
 use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 
-use shelve_core::Edge;
+use shelve_core::{Edge, ScreenRect};
 use windows::core::{implement, w, Ref};
-use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINTL, WPARAM};
+use windows::Win32::Foundation::{
+    COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINTL, RECT, WPARAM,
+};
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromPoint, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    GetMonitorInfoW, MonitorFromPoint, MonitorFromRect, HMONITOR, MONITORINFO,
+    MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL,
 };
 use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -206,6 +209,26 @@ unsafe extern "system" fn sensor_proc(
             if unsafe { GetMonitorInfoW(mon, &mut info) }.as_bool() {
                 // Whole monitor, not the work area: the edge is where the cursor stops.
                 let r = info.rcMonitor;
+                // An edge with a monitor past it (at any height) is a seam the cursor
+                // crosses, not an edge: a file carried across it must not open the shelf.
+                let mon = ScreenRect {
+                    left: r.left,
+                    top: r.top,
+                    right: r.right,
+                    bottom: r.bottom,
+                };
+                let p = probe_rect(mon, EDGE.get());
+                let probe = RECT {
+                    left: p.left,
+                    top: p.top,
+                    right: p.right,
+                    bottom: p.bottom,
+                };
+                if !unsafe { MonitorFromRect(&probe, MONITOR_DEFAULTTONULL) }.is_invalid() {
+                    // SENSOR_MON stays on this monitor, so this is not asked on every move.
+                    let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
+                    return LRESULT(0);
+                }
                 let zone = ZONE.get();
                 let x = match EDGE.get() {
                     Edge::Left => r.left,
@@ -230,6 +253,19 @@ unsafe extern "system" fn sensor_proc(
             LRESULT(0)
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+    }
+}
+
+/// A 1 px strip just past `monitor`'s `edge`, its full height.
+fn probe_rect(monitor: ScreenRect, edge: Edge) -> ScreenRect {
+    let (left, right) = match edge {
+        Edge::Left => (monitor.left - 1, monitor.left),
+        Edge::Right => (monitor.right, monitor.right + 1),
+    };
+    ScreenRect {
+        left,
+        right,
+        ..monitor
     }
 }
 
@@ -287,5 +323,43 @@ impl IDropTarget_Impl for Sensor_Impl {
     ) -> windows::core::Result<()> {
         unsafe { *effect = DROPEFFECT_NONE };
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MON: ScreenRect = ScreenRect {
+        left: 0,
+        top: 0,
+        right: 1920,
+        bottom: 1080,
+    };
+
+    #[test]
+    fn the_probe_is_one_pixel_just_past_the_right_edge() {
+        let r = ScreenRect {
+            left: 1920,
+            right: 1921,
+            ..MON
+        };
+        assert_eq!(probe_rect(MON, Edge::Right), r);
+    }
+
+    #[test]
+    fn the_probe_is_one_pixel_just_past_the_left_edge() {
+        let mon = ScreenRect {
+            left: -1280,
+            top: 200,
+            right: 0,
+            bottom: 1224,
+        };
+        let r = ScreenRect {
+            left: -1281,
+            right: -1280,
+            ..mon
+        };
+        assert_eq!(probe_rect(mon, Edge::Left), r);
     }
 }
