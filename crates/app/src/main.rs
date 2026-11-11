@@ -5,6 +5,7 @@ mod app;
 mod auto_show;
 mod labels;
 mod layout;
+mod presence;
 mod rows;
 mod settings;
 mod shelf_view;
@@ -71,6 +72,18 @@ fn main() -> eframe::Result {
                     ctx.request_repaint();
                 }
             });
+            // One long-lived thread asks the disk; its answers wake the UI like events do.
+            let (presence_queue, checker) = presence::queue();
+            let (answer_tx, presence_answers) = mpsc::channel();
+            let ctx = cc.egui_ctx.clone();
+            std::thread::Builder::new()
+                .name("presence".into())
+                .spawn(move || {
+                    checker.run(|path, a| {
+                        let _ = answer_tx.send((path, a));
+                        ctx.request_repaint();
+                    })
+                })?;
             let shared = layout::SharedRect::default();
             let mouse_hook = app::start_auto_show(&cfg, platform_tx.clone(), shared.clone());
             let platform = shelve_platform::start(&cfg, platform_tx.clone())?;
@@ -94,6 +107,9 @@ fn main() -> eframe::Result {
                 platform: Some(platform),
                 mouse_hook,
                 icons: HashMap::new(),
+                presence: HashMap::new(),
+                presence_queue,
+                presence_answers,
                 look,
                 palette,
                 screen: ScreenRect::default(),

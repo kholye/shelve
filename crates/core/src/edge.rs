@@ -65,11 +65,17 @@ impl EdgeTrigger {
         self.shelf_rect = rect;
     }
 
-    pub fn on_mouse(&mut self, pos: (i32, i32), left_down: bool, now_ms: u64) -> Option<EdgeEvent> {
+    /// `button_down`: the left or the right button is held.
+    pub fn on_mouse(
+        &mut self,
+        pos: (i32, i32),
+        button_down: bool,
+        now_ms: u64,
+    ) -> Option<EdgeEvent> {
         let elapsed = |since: u64| now_ms.saturating_sub(since);
-        let keep_visible = left_down || self.shelf_rect.is_some_and(|r| r.contains(pos));
+        let keep_visible = button_down || self.shelf_rect.is_some_and(|r| r.contains(pos));
         let (next, event) = match self.state {
-            State::Idle | State::Dwelling { .. } if !(left_down && self.in_zone(pos)) => {
+            State::Idle | State::Dwelling { .. } if !(button_down && self.in_zone(pos)) => {
                 (State::Idle, None)
             }
             State::Idle => (State::Dwelling { since: now_ms }, None),

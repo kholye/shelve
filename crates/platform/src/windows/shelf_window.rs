@@ -3,6 +3,11 @@
 
 use shelve_core::ScreenRect;
 use windows::core::BOOL;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetAsyncKeyState, VIRTUAL_KEY, VK_LBUTTON, VK_RBUTTON,
+};
+
+use crate::MouseSample;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMNCRENDERINGPOLICY, DWMNCRP_DISABLED, DWMWA_NCRENDERING_POLICY,
@@ -122,6 +127,19 @@ pub fn hide_shelf_window(raw_hwnd: isize) {
 pub fn trim_memory() {
     unsafe {
         let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+    }
+}
+
+/// The cursor as it is now, not as the mouse hook last saw it: the hook misses
+/// `SetCursorPos` moves and goes silent if Windows removes it.
+pub fn cursor_state() -> MouseSample {
+    let mut pt = POINT::default();
+    let _ = unsafe { GetCursorPos(&mut pt) };
+    // Physical buttons. Swapped buttons (SM_SWAPBUTTON) need no care: either one counts.
+    let held = |vk: VIRTUAL_KEY| unsafe { GetAsyncKeyState(vk.0 as i32) } < 0;
+    MouseSample {
+        pos: (pt.x, pt.y),
+        button_down: held(VK_LBUTTON) || held(VK_RBUTTON),
     }
 }
 

@@ -31,7 +31,8 @@ pub use drag_out::start_drag_out;
 pub use file_icon::file_icon;
 pub use mouse_hook::{start_mouse_hook, MouseHook};
 pub use shelf_window::{
-    hide_shelf_window, monitor_at_cursor, prepare_shelf_window, show_shelf_window, trim_memory,
+    cursor_state, hide_shelf_window, monitor_at_cursor, prepare_shelf_window, show_shelf_window,
+    trim_memory,
 };
 pub use single_instance::{acquire_single_instance, SingleInstance};
 pub use system_look::{animations_enabled, system_look, SystemLook};

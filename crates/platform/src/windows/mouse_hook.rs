@@ -8,11 +8,14 @@ use std::io;
 use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 
-use shelve_core::Edge;
+use shelve_core::{Edge, ScreenRect};
 use windows::core::{implement, w, Ref};
-use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINTL, WPARAM};
+use windows::Win32::Foundation::{
+    COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINTL, RECT, WPARAM,
+};
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromPoint, HMONITOR, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    GetMonitorInfoW, MonitorFromPoint, MonitorFromRect, HMONITOR, MONITORINFO,
+    MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL,
 };
 use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -27,8 +30,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostMessageW, PostThreadMessageW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
     SetWindowsHookExW, ShowWindow, UnhookWindowsHookEx, HWND_TOPMOST, LWA_ALPHA, MSG,
     MSLLHOOKSTRUCT, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WH_MOUSE_LL, WM_APP, WM_LBUTTONDOWN,
-    WM_LBUTTONUP, WM_MOUSEMOVE, WM_QUIT, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    WM_LBUTTONUP, WM_MOUSEMOVE, WM_QUIT, WM_RBUTTONDOWN, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use crate::{HookEvent, MouseSample};
@@ -39,12 +42,44 @@ const WM_HIDE_SENSOR: u32 = WM_APP + 2;
 
 thread_local! {
     static TX: RefCell<Option<Sender<HookEvent>>> = const { RefCell::new(None) };
-    static LEFT_DOWN: Cell<bool> = const { Cell::new(false) };
+    static HELD: Cell<Held> = const { Cell::new(Held { left: false, right: false }) };
     static SENSOR: Cell<isize> = const { Cell::new(0) };
     /// Monitor the strip currently sits on; 0 while hidden.
     static SENSOR_MON: Cell<isize> = const { Cell::new(0) };
     static EDGE: Cell<Edge> = const { Cell::new(Edge::Right) };
     static ZONE: Cell<i32> = const { Cell::new(4) };
+}
+
+/// Mouse buttons held, as the hook has seen them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Held {
+    left: bool,
+    right: bool,
+}
+
+impl Held {
+    fn after(self, msg: u32) -> Held {
+        match msg {
+            WM_LBUTTONDOWN => Held { left: true, ..self },
+            WM_LBUTTONUP => Held {
+                left: false,
+                ..self
+            },
+            WM_RBUTTONDOWN => Held {
+                right: true,
+                ..self
+            },
+            WM_RBUTTONUP => Held {
+                right: false,
+                ..self
+            },
+            _ => self,
+        }
+    }
+
+    fn any(self) -> bool {
+        self.left || self.right
+    }
 }
 
 fn send(e: HookEvent) {
@@ -156,10 +191,10 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
     if code >= 0 {
         let info = unsafe { &*(lparam.0 as *const MSLLHOOKSTRUCT) };
         let sensor = HWND(SENSOR.get() as *mut _);
-        match wparam.0 as u32 {
-            WM_LBUTTONDOWN => LEFT_DOWN.set(true),
+        let msg = wparam.0 as u32;
+        HELD.set(HELD.get().after(msg));
+        match msg {
             WM_LBUTTONUP => {
-                LEFT_DOWN.set(false);
                 if SENSOR_MON.replace(0) != 0 {
                     let _ =
                         unsafe { PostMessageW(Some(sensor), WM_HIDE_SENSOR, WPARAM(0), LPARAM(0)) };
@@ -167,7 +202,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
             }
             // Only once the button is held and moving: the press itself has already been
             // hit-tested, so the strip never steals a click (e.g. on an edge scrollbar).
-            WM_MOUSEMOVE if LEFT_DOWN.get() => {
+            WM_MOUSEMOVE if HELD.get().left => {
                 let mon = unsafe { MonitorFromPoint(info.pt, MONITOR_DEFAULTTONEAREST) };
                 if SENSOR_MON.replace(mon.0 as isize) != mon.0 as isize {
                     let _ = unsafe {
@@ -184,7 +219,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
         }
         send(HookEvent::Mouse(MouseSample {
             pos: (info.pt.x, info.pt.y),
-            left_down: LEFT_DOWN.get(),
+            button_down: HELD.get().any(),
         }));
     }
     unsafe { CallNextHookEx(None, code, wparam, lparam) }
@@ -206,6 +241,26 @@ unsafe extern "system" fn sensor_proc(
             if unsafe { GetMonitorInfoW(mon, &mut info) }.as_bool() {
                 // Whole monitor, not the work area: the edge is where the cursor stops.
                 let r = info.rcMonitor;
+                // An edge with a monitor past it (at any height) is a seam the cursor
+                // crosses, not an edge: a file carried across it must not open the shelf.
+                let mon = ScreenRect {
+                    left: r.left,
+                    top: r.top,
+                    right: r.right,
+                    bottom: r.bottom,
+                };
+                let p = probe_rect(mon, EDGE.get());
+                let probe = RECT {
+                    left: p.left,
+                    top: p.top,
+                    right: p.right,
+                    bottom: p.bottom,
+                };
+                if !unsafe { MonitorFromRect(&probe, MONITOR_DEFAULTTONULL) }.is_invalid() {
+                    // SENSOR_MON stays on this monitor, so this is not asked on every move.
+                    let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
+                    return LRESULT(0);
+                }
                 let zone = ZONE.get();
                 let x = match EDGE.get() {
                     Edge::Left => r.left,
@@ -230,6 +285,19 @@ unsafe extern "system" fn sensor_proc(
             LRESULT(0)
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+    }
+}
+
+/// A 1 px strip just past `monitor`'s `edge`, its full height.
+fn probe_rect(monitor: ScreenRect, edge: Edge) -> ScreenRect {
+    let (left, right) = match edge {
+        Edge::Left => (monitor.left - 1, monitor.left),
+        Edge::Right => (monitor.right, monitor.right + 1),
+    };
+    ScreenRect {
+        left,
+        right,
+        ..monitor
     }
 }
 
@@ -287,5 +355,55 @@ impl IDropTarget_Impl for Sensor_Impl {
     ) -> windows::core::Result<()> {
         unsafe { *effect = DROPEFFECT_NONE };
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MON: ScreenRect = ScreenRect {
+        left: 0,
+        top: 0,
+        right: 1920,
+        bottom: 1080,
+    };
+
+    #[test]
+    fn either_button_counts_as_held_until_both_are_up() {
+        let mut held = Held::default();
+        held = held.after(WM_RBUTTONDOWN);
+        assert!(held.any(), "right button alone");
+        held = held.after(WM_LBUTTONDOWN).after(WM_LBUTTONUP);
+        assert!(held.any(), "right still down after left went up");
+        held = held.after(WM_RBUTTONUP);
+        assert!(!held.any());
+        assert_eq!(held.after(WM_MOUSEMOVE), held);
+    }
+
+    #[test]
+    fn the_probe_is_one_pixel_just_past_the_right_edge() {
+        let r = ScreenRect {
+            left: 1920,
+            right: 1921,
+            ..MON
+        };
+        assert_eq!(probe_rect(MON, Edge::Right), r);
+    }
+
+    #[test]
+    fn the_probe_is_one_pixel_just_past_the_left_edge() {
+        let mon = ScreenRect {
+            left: -1280,
+            top: 200,
+            right: 0,
+            bottom: 1224,
+        };
+        let r = ScreenRect {
+            left: -1281,
+            right: -1280,
+            ..mon
+        };
+        assert_eq!(probe_rect(mon, Edge::Left), r);
     }
 }

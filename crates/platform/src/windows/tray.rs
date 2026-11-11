@@ -20,7 +20,7 @@ pub fn build(
     let t = lang.text();
     let status_text = match status {
         HotkeyStatus::Registered => lang.tray_hotkey(hotkey),
-        HotkeyStatus::Failed(e) => lang.tray_hotkey_failed(e),
+        HotkeyStatus::Failed(e) => lang.tray_hotkey_failed(&lang.hotkey_status_error(hotkey, *e)),
     };
     let menu = Menu::with_items(&[
         &MenuItem::with_id(TOGGLE, t.tray_toggle, true, None),
