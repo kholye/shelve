@@ -5,10 +5,11 @@ use std::time::Instant;
 
 use eframe::egui::{self, pos2, vec2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke};
 use eframe::epaint::text::{LayoutJob, TextFormat, TextWrapping};
-use shelve_core::{availability, Availability, ItemKind, Lang, ShelfItem, Text};
+use shelve_core::{ItemKind, Lang, ShelfItem, Text};
 
 use crate::labels::folder_label;
 use crate::layout::{HEADER_H, PAD_BOTTOM, RADIUS, ROW_H};
+use crate::presence::{is_missing, Presence};
 use crate::rows::Rows;
 use crate::theme::Palette;
 
@@ -30,14 +31,14 @@ pub enum Action {
 
 /// Draws the shelf into `ui` (the inside of the panel). `rows` are the items of the
 /// shelf with their animation state at `now`. `file_over`: a file is being carried over
-/// the shelf. `icon` returns the shell icon of an item, if there is one.
+/// the shelf. `presence` says which files are gone; the view never asks the disk itself.
+/// `icon` returns the shell icon of an item, if there is one.
 pub fn shelf_view(
     ui: &mut egui::Ui,
     rows: &Rows,
     now: Instant,
-    p: &Palette,
-    file_over: bool,
-    lang: Lang,
+    (p, file_over, lang): (&Palette, bool, Lang),
+    presence: &Presence,
     icon: &mut dyn FnMut(&ShelfItem) -> Option<egui::TextureHandle>,
 ) -> Option<Action> {
     let panel = ui.max_rect();
@@ -79,6 +80,7 @@ pub fn shelf_view(
                         height: rows.height(r, now),
                         flash: rows.flash(r, now),
                         interactive: !rows.is_leaving(r),
+                        missing: is_missing(presence, &r.item.path),
                     };
                     let size = vec2(ui.available_width(), ROW_H * look.height);
                     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
@@ -184,6 +186,8 @@ struct RowLook {
     flash: f32,
     /// False for a row on its way out: it no longer reacts to the mouse.
     interactive: bool,
+    /// The file is gone: greyed and struck through, a click removes the row.
+    missing: bool,
 }
 
 fn row(
@@ -200,7 +204,7 @@ fn row(
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     let fade = |c: Color32| c.gamma_multiply(look.height);
     let (text_color, weak) = (fade(p.text), fade(p.text_weak));
-    let missing = availability(item) == Availability::Missing;
+    let missing = look.missing;
     let id = ui.scope_id().with(&item.path);
     // The whole row is the handle: click (to dismiss a missing file) and drag out.
     let resp = look.interactive.then(|| {
@@ -435,12 +439,14 @@ mod tests {
     use super::*;
     use crate::layout::PANEL_W;
     use crate::theme::palette;
+    use shelve_core::Availability;
     use std::path::PathBuf;
 
     const PANEL: Rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(PANEL_W, 400.0));
 
     fn existing(n: usize) -> Vec<ShelfItem> {
-        // Real paths, so the rows are not "missing". Their names differ, the test never opens them.
+        // Real paths, so a test can show the view ignores the disk. Their names differ, the
+        // test never opens them.
         let dir = std::env::temp_dir();
         std::iter::once(dir.clone())
             .chain(dir.ancestors().skip(1).map(PathBuf::from))
@@ -466,9 +472,24 @@ mod tests {
         )
     }
 
+    /// What the presence checker would have answered: `missing()` is gone.
+    fn presence() -> Presence {
+        Presence::from([(missing().path, Availability::Missing)])
+    }
+
     fn pass(
         ctx: &egui::Context,
         items: &[ShelfItem],
+        file_over: bool,
+        events: Vec<egui::Event>,
+    ) -> Option<Action> {
+        pass_with(ctx, items, &presence(), file_over, events)
+    }
+
+    fn pass_with(
+        ctx: &egui::Context,
+        items: &[ShelfItem],
+        presence: &Presence,
         file_over: bool,
         events: Vec<egui::Event>,
     ) -> Option<Action> {
@@ -483,10 +504,50 @@ mod tests {
         let mut rows = Rows::default();
         rows.sync(items, now, false);
         let mut out = ctx.run_ui(input, |ui| {
-            action = shelf_view(ui, &rows, now, &p, file_over, Lang::En, &mut |_| None);
+            let look = (&p, file_over, Lang::En);
+            action = shelf_view(ui, &rows, now, look, presence, &mut |_| None);
         });
         out.textures_delta.clear();
         action
+    }
+
+    #[test]
+    fn a_row_marked_missing_is_drawn_missing_though_its_path_exists() {
+        // The view never asks the disk: a sleeping network drive froze every frame.
+        let items = existing(1);
+        let marked = Presence::from([(items[0].path.clone(), Availability::Missing)]);
+        let at = row_rect(0).left_center() + vec2(60.0, 0.0);
+        let ctx = egui::Context::default();
+        pass_with(&ctx, &items, &marked, false, vec![]);
+        pass_with(
+            &ctx,
+            &items,
+            &marked,
+            false,
+            vec![egui::Event::PointerMoved(at)],
+        );
+        pass_with(&ctx, &items, &marked, false, vec![button(at, true)]);
+        let released = pass_with(&ctx, &items, &marked, false, vec![button(at, false)]);
+        assert_eq!(released, Some(Action::Remove(items[0].path.clone())));
+    }
+
+    #[test]
+    fn a_path_not_yet_checked_counts_as_present() {
+        let at = row_rect(0).left_center() + vec2(60.0, 0.0);
+        let ctx = egui::Context::default();
+        let none = Presence::new();
+        let items = [missing()];
+        pass_with(&ctx, &items, &none, false, vec![]);
+        pass_with(
+            &ctx,
+            &items,
+            &none,
+            false,
+            vec![egui::Event::PointerMoved(at)],
+        );
+        pass_with(&ctx, &items, &none, false, vec![button(at, true)]);
+        let released = pass_with(&ctx, &items, &none, false, vec![button(at, false)]);
+        assert_eq!(released, None, "a present row ignores a click");
     }
 
     fn button(at: Pos2, pressed: bool) -> egui::Event {

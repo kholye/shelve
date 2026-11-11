@@ -12,11 +12,13 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, ICONINFO};
 
-/// Large (32 px at 100% scale) shell icon as (width, height, RGBA). A missing path gets the generic icon for its type.
+/// Large (32 px at 100% scale) shell icon as (width, height, RGBA). A missing path gets the
+/// generic icon for its type. So does a network path: the disk is not touched for it, since
+/// a sleeping network drive would hold up the UI thread.
 pub fn file_icon(path: &Path, is_dir: bool) -> Option<(u32, u32, Vec<u8>)> {
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
     let mut flags = SHGFI_ICON | SHGFI_LARGEICON;
-    if !path.exists() {
+    if on_network(path) || !path.exists() {
         flags |= SHGFI_USEFILEATTRIBUTES;
     }
     let attrs = if is_dir {
@@ -40,6 +42,15 @@ pub fn file_icon(path: &Path, is_dir: bool) -> Option<(u32, u32, Vec<u8>)> {
         let _ = DestroyIcon(info.hIcon);
         rgba
     }
+}
+
+/// `\\server\share\...`: on another computer.
+fn on_network(path: &Path) -> bool {
+    let backslash = u16::from(b'\\');
+    path.as_os_str()
+        .encode_wide()
+        .take(2)
+        .eq([backslash, backslash])
 }
 
 unsafe fn icon_rgba(info: &SHFILEINFOW) -> Option<(u32, u32, Vec<u8>)> {
@@ -102,4 +113,16 @@ unsafe fn icon_rgba(info: &SHFILEINFOW) -> Option<(u32, u32, Vec<u8>)> {
         let _ = DeleteObject(ii.hbmMask.into());
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn network_paths_are_told_by_their_leading_backslashes() {
+        assert!(on_network(Path::new(r"\\server\share\отчёт.docx")));
+        assert!(!on_network(Path::new(r"C:\Users\a.txt")));
+        assert!(!on_network(Path::new(r"D:\")));
+    }
 }

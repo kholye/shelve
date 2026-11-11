@@ -5,10 +5,10 @@ use std::time::Instant;
 
 use eframe::egui;
 use shelve_core::{
-    availability, default_config_path, Availability, Config, Edge, ItemKind, ScreenRect, Shelf,
-    ShelfItem,
+    default_config_path, Availability, Config, Edge, ItemKind, ScreenRect, Shelf, ShelfItem,
 };
 
+use crate::presence::{self, is_missing, Presence};
 use crate::shelf_view::{shelf_view, Action};
 use shelve_platform::{HotkeyStatus, MouseHook, PlatformEvent, PlatformHandle, SystemLook};
 
@@ -44,6 +44,11 @@ pub struct ShelfApp {
     /// None: the shell had no icon, the drawn glyph is used.
     /// Note: never pruned; a few KB per path ever dropped in one session.
     pub icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
+    /// Which files are gone, as last answered by the presence thread. Drawing only reads it.
+    pub presence: Presence,
+    /// Asks the presence thread; its answers come back on `presence_answers`.
+    pub presence_queue: presence::Queue,
+    pub presence_answers: Receiver<(PathBuf, Availability)>,
     /// What Windows looked like when `palette` was made.
     pub look: SystemLook,
     pub palette: Palette,
@@ -121,6 +126,9 @@ impl ShelfApp {
             self.animate = shelve_platform::animations_enabled();
             let now = Instant::now();
             if !self.visible {
+                for item in self.shelf.items() {
+                    self.presence_queue.check(item.path.clone());
+                }
                 // Whatever changed while hidden is simply there: nothing plays on show.
                 self.rows.sync(self.shelf.items(), now, false);
                 self.height = Glide::at_rest(self.target_h(), now);
@@ -238,6 +246,7 @@ impl eframe::App for ShelfApp {
 
     // Runs even while the window is hidden, whenever the platform thread calls request_repaint.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.presence.extend(self.presence_answers.try_iter());
         while let Ok(ev) = self.events.try_recv() {
             println!("event {ev:?}");
             // Every way to show the shelf arrives here as an event, so it never opens stale.
@@ -304,11 +313,16 @@ impl eframe::App for ShelfApp {
                 .collect()
         });
         if !dropped.is_empty() {
-            let n = dropped.len();
+            let (n, before) = (dropped.len(), self.shelf.items().len());
             println!(
                 "dropped {n}, added {}",
                 accept_drop(&mut self.shelf, dropped)
             );
+            // New items go to the end. Present until the answer says otherwise.
+            for item in &self.shelf.items()[before..] {
+                self.presence.remove(&item.path);
+                self.presence_queue.check(item.path.clone());
+            }
         }
         self.rows.sync(self.shelf.items(), now, self.animate);
         let target = self.target_h();
@@ -398,10 +412,14 @@ impl ShelfApp {
                 panel
                     .show(ui, |ui| {
                         ui.set_min_size(ui.available_size());
-                        let lang = self.cfg.lang;
-                        shelf_view(ui, &rows, now, &palette, file_over, lang, &mut |item| {
+                        let look = (&palette, file_over, self.cfg.lang);
+                        // Lent too: `icon` borrows `self` mutably.
+                        let presence = std::mem::take(&mut self.presence);
+                        let action = shelf_view(ui, &rows, now, look, &presence, &mut |item| {
                             self.icon(&ctx, item)
-                        })
+                        });
+                        self.presence = presence;
+                        action
                     })
                     .inner
             })
@@ -426,12 +444,13 @@ impl ShelfApp {
             Some(Action::Clear) => self.shelf.clear(),
             Some(Action::OpenSettings) => self.settings.open(&self.cfg, self.hotkey_status()),
             Some(Action::DragOut(item)) => {
-                let paths = drag_candidates(std::slice::from_ref(&item));
+                let paths = drag_candidates(std::slice::from_ref(&item), &self.presence);
                 if !paths.is_empty() {
                     let res = shelve_platform::start_drag_out(&paths);
                     println!("drag_out {res:?}");
                     self.release_pointer = true;
                     ui.ctx().request_repaint();
+                    self.presence_queue.check(item.path);
                 }
             }
             None => {}
@@ -448,11 +467,12 @@ pub fn accept_drop(shelf: &mut Shelf, paths: Vec<PathBuf>) -> usize {
         .count()
 }
 
-/// Paths of the items that still exist; missing ones are never dragged out.
-pub fn drag_candidates(items: &[ShelfItem]) -> Vec<PathBuf> {
+/// Paths of the items not known to be gone; missing ones are never dragged out.
+/// Reads `presence` only: the disk is not asked on the UI thread.
+pub fn drag_candidates(items: &[ShelfItem], presence: &Presence) -> Vec<PathBuf> {
     items
         .iter()
-        .filter(|i| availability(i) == Availability::Present)
+        .filter(|i| !is_missing(presence, &i.path))
         .map(|i| i.path.clone())
         .collect()
 }
@@ -525,21 +545,22 @@ mod tests {
     }
 
     #[test]
-    fn drag_candidates_skips_missing() {
-        let dir = temp_dir("candidates");
+    fn drag_candidates_skips_the_ones_marked_missing() {
+        // Only the presence answers count, the disk is not asked: both paths exist.
+        let (a, b) = (std::env::temp_dir(), PathBuf::from(r"C:\"));
         let mut shelf = Shelf::new();
-        shelf.add(dir.clone());
-        shelf.add(dir.join("удалён.txt"));
-        assert_eq!(drag_candidates(shelf.items()), vec![dir.clone()]);
-        std::fs::remove_dir_all(dir).unwrap();
+        shelf.add(a.clone());
+        shelf.add(b.clone());
+        let presence = Presence::from([(b, Availability::Missing)]);
+        assert_eq!(drag_candidates(shelf.items(), &presence), vec![a]);
     }
 
     #[test]
-    fn drag_candidates_empty_for_all_missing() {
+    fn drag_candidates_take_unchecked_paths() {
         let mut shelf = Shelf::new();
         shelf.add(PathBuf::from(r"C:\shelve-нет\a.txt"));
-        shelf.add(PathBuf::from(r"C:\shelve-нет\b.txt"));
-        assert!(drag_candidates(shelf.items()).is_empty());
+        let all = vec![PathBuf::from(r"C:\shelve-нет\a.txt")];
+        assert_eq!(drag_candidates(shelf.items(), &Presence::new()), all);
     }
 
     #[test]
