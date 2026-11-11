@@ -23,6 +23,8 @@ pub enum PlatformEvent {
     ShowExisting,
     EdgeShow,
     EdgeHide,
+    /// The mouse rested on the tab at the screen edge, or clicked it.
+    TabHovered,
     /// Windows theme, taskbar colour or accent colour changed.
     ThemeChanged,
 }

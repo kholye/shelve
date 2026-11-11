@@ -19,7 +19,7 @@ use crate::layout::{self, SharedRect};
 use crate::rows::{ease_out, Glide, Rows, ANIM_S};
 use crate::settings::{Changes, Settings};
 use crate::theme::{self, Palette};
-use crate::window::shelf_rect;
+use crate::window::{shelf_rect, tab_rect};
 
 /// Slide-in duration, seconds.
 const SLIDE_S: f32 = ANIM_S;
@@ -74,6 +74,8 @@ pub struct ShelfApp {
     pub shared: SharedRect,
     /// A file is being carried over the shelf right now.
     pub file_over: bool,
+    /// Where the tab was last put; None while it is hidden.
+    pub tab: Option<ScreenRect>,
 }
 
 /// Starts the mouse hook and edge sensor; None if "show while dragging" is off. Its events
@@ -171,6 +173,7 @@ impl ShelfApp {
         self.visible = false;
         self.placed_h = None;
         *self.shared.lock().unwrap() = None;
+        self.sync_tab();
         // Once per hide, not per frame. The settings window is still being drawn and
         // would pull its pages straight back.
         if !self.settings.is_open() {
@@ -185,6 +188,19 @@ impl ShelfApp {
         if look != self.look {
             self.look = look;
             self.palette = theme::apply(ctx, look);
+        }
+    }
+
+    /// The tab shows while the shelf is hidden and has files, at the shelf's place on the
+    /// monitor it was last shown on. Tells the platform thread only when that changes.
+    fn sync_tab(&mut self) {
+        let want = (!self.visible && !self.shelf.items().is_empty())
+            .then(|| tab_rect(self.cfg.edge, self.cfg.align, self.screen, self.scale));
+        if want != self.tab {
+            self.tab = want;
+            if let Some(p) = &self.platform {
+                p.set_tab(want);
+            }
         }
     }
 
@@ -210,6 +226,8 @@ impl ShelfApp {
             self.platform = shelve_platform::start(&self.cfg, self.platform_tx.clone())
                 .inspect_err(|e| println!("platform restart failed: {e}"))
                 .ok();
+            // The new thread's tab starts hidden; place it again.
+            self.tab = None;
         }
         if changes.autostart {
             autostart_error = shelve_platform::set_autostart(self.cfg.autostart)
@@ -218,6 +236,7 @@ impl ShelfApp {
         }
         self.settings
             .set_feedback(self.hotkey_status(), autostart_error);
+        self.sync_tab(); // edge or alignment may have moved the tab too
         if self.visible {
             // Edge or alignment may have moved it. On the monitor it is on: `set_visible`
             // would take it to the one under the cursor (the settings window's).
@@ -267,6 +286,7 @@ impl eframe::App for ShelfApp {
                 // Asked for, not done here: the auto_show thread decides and answers.
                 PlatformEvent::Hotkey | PlatformEvent::TrayToggle => self.command(Command::Toggle),
                 PlatformEvent::ShowExisting => self.command(Command::ShowExisting),
+                PlatformEvent::TabHovered => self.command(Command::TabHovered),
                 PlatformEvent::EdgeShow => self.set_visible(true),
                 PlatformEvent::EdgeHide => self.set_visible(false),
                 PlatformEvent::TrayClear => self.shelf.clear(),
@@ -275,6 +295,8 @@ impl eframe::App for ShelfApp {
                 PlatformEvent::ThemeChanged => ctx.request_repaint(),
             }
         }
+        // After TrayClear or a moved-away file the hidden shelf may be empty: no tab then.
+        self.sync_tab();
         if self.settings.is_open() && !self.settings.exists(ctx) {
             // With the shelf hidden `ui` would not run to create the settings window. Only
             // until it exists: then it keeps `ui` running itself, and asking every pass loops.

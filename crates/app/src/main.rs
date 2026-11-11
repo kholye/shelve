@@ -137,6 +137,7 @@ fn main() -> eframe::Result {
                 win: ScreenRect::default(),
                 shared,
                 file_over: false,
+                tab: None,
             }))
         }),
     )

@@ -6,14 +6,16 @@ mod mouse_hook;
 mod shelf_window;
 mod single_instance;
 mod system_look;
+mod tab;
 mod tray;
 pub use hotkey::try_hotkey;
 
 use std::sync::mpsc::{self, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
-use shelve_core::{Config, Lang};
+use shelve_core::{Config, Lang, ScreenRect};
 use tray_icon::menu::MenuEvent;
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 use windows::Win32::Foundation::{CloseHandle, LPARAM, WAIT_OBJECT_0, WPARAM};
@@ -21,11 +23,17 @@ use windows::Win32::System::Threading::{GetCurrentThreadId, INFINITE};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MsgWaitForMultipleObjects, PeekMessageW, PostThreadMessageW,
-    TranslateMessage, MSG, PM_REMOVE, QS_ALLINPUT, WM_QUIT,
+    TranslateMessage, MSG, PM_REMOVE, QS_ALLINPUT, WM_APP, WM_QUIT,
 };
 
 use crate::{HotkeyStatus, PlatformEvent};
 use system_look::KeyWatch;
+
+/// Thread message: show or hide the tab where `PlatformHandle::set_tab` put it.
+const WM_PLACE_TAB: u32 = WM_APP + 1;
+
+/// Where the tab should be; None hides it.
+type TabPlace = Arc<Mutex<Option<ScreenRect>>>;
 
 pub use autostart::{is_autostart, set_autostart};
 pub use drag_out::start_drag_out;
@@ -45,11 +53,20 @@ pub struct PlatformHandle {
     thread_id: u32,
     thread: Option<JoinHandle<()>>,
     hotkey_status: HotkeyStatus,
+    tab: TabPlace,
 }
 
 impl PlatformHandle {
     pub fn hotkey_status(&self) -> &HotkeyStatus {
         &self.hotkey_status
+    }
+
+    /// Shows the tab at `rect` (physical pixels), or hides it with None.
+    pub fn set_tab(&self, rect: Option<ScreenRect>) {
+        *self.tab.lock().unwrap() = rect;
+        unsafe {
+            let _ = PostThreadMessageW(self.thread_id, WM_PLACE_TAB, WPARAM(0), LPARAM(0));
+        }
     }
 }
 
@@ -67,14 +84,17 @@ impl Drop for PlatformHandle {
 pub fn start(cfg: &Config, tx: Sender<PlatformEvent>) -> anyhow::Result<PlatformHandle> {
     let (init_tx, init_rx) = mpsc::sync_channel(1);
     let (hotkey, lang) = (cfg.hotkey.clone(), cfg.lang);
+    let tab = TabPlace::default();
+    let tab_place = tab.clone();
     let thread = thread::Builder::new()
         .name("platform".into())
-        .spawn(move || run(&hotkey, lang, tx, init_tx))?;
+        .spawn(move || run(&hotkey, lang, tx, tab_place, init_tx))?;
     let (thread_id, hotkey_status) = init_rx.recv()??;
     Ok(PlatformHandle {
         thread_id,
         thread: Some(thread),
         hotkey_status,
+        tab,
     })
 }
 
@@ -96,7 +116,13 @@ fn woke(wait: u32, handles: usize) -> Woke {
     }
 }
 
-fn run(hotkey: &str, lang: Lang, tx: Sender<PlatformEvent>, init: mpsc::SyncSender<Init>) {
+fn run(
+    hotkey: &str,
+    lang: Lang,
+    tx: Sender<PlatformEvent>,
+    tab_place: TabPlace,
+    init: mpsc::SyncSender<Init>,
+) {
     // Everything below must be created on this thread: its windows get their
     // messages only from this thread's loop.
     let (_manager, hotkey_id, status) = hotkey::register(hotkey);
@@ -105,6 +131,10 @@ fn run(hotkey: &str, lang: Lang, tx: Sender<PlatformEvent>, init: mpsc::SyncSend
         Ok(t) => t,
         Err(e) => return drop(init.send(Err(e))),
     };
+    // Without it the shelf still comes back by the hotkey and the tray.
+    let tab = tab::Tab::create(tx.clone())
+        .inspect_err(|e| println!("tab window failed: {e}"))
+        .ok();
     let show_event = match single_instance::show_event() {
         Ok(h) => h,
         Err(e) => return drop(init.send(Err(e.into()))),
@@ -135,6 +165,9 @@ fn run(hotkey: &str, lang: Lang, tx: Sender<PlatformEvent>, init: mpsc::SyncSend
                     taskbar_dark = dark;
                     let _ = tray.set_icon(tray::icon(dark).ok());
                 }
+                if let Some(tab) = &tab {
+                    tab.repaint(); // the accent colour may have changed
+                }
                 Some(PlatformEvent::ThemeChanged)
             }
             Woke::Messages => None,
@@ -151,6 +184,12 @@ fn run(hotkey: &str, lang: Lang, tx: Sender<PlatformEvent>, init: mpsc::SyncSend
         while unsafe { PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE) }.as_bool() {
             if msg.message == WM_QUIT {
                 break 'outer;
+            }
+            if msg.message == WM_PLACE_TAB {
+                if let Some(tab) = &tab {
+                    tab.place(*tab_place.lock().unwrap());
+                }
+                continue;
             }
             unsafe {
                 let _ = TranslateMessage(&msg);

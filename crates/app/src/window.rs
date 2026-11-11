@@ -41,6 +41,14 @@ pub fn shelf_rect(
     }
 }
 
+/// Tab size in points: the strip left at the screen edge while a shelf with files is hidden.
+const TAB_SIZE: (f32, f32) = (6.0, 48.0);
+
+/// Where the tab goes: on the shelf's edge, at the shelf's height, physical pixels.
+pub fn tab_rect(edge: Edge, align: Align, screen: ScreenRect, scale: f32) -> ScreenRect {
+    shelf_rect(edge, align, screen, TAB_SIZE, scale)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +103,36 @@ mod tests {
         };
         let r = shelf_rect(Edge::Left, Align::Bottom, second, SIZE, 1.0);
         assert_eq!((r.left, r.bottom), (-1280, 1124));
+    }
+
+    #[test]
+    fn the_tab_sits_on_the_shelf_edge_at_the_shelf_height() {
+        let tab = |edge, align| tab_rect(edge, align, SCREEN, 1.0);
+        let r = |left, top| ScreenRect {
+            left,
+            top,
+            right: left + 6,
+            bottom: top + 48,
+        };
+        assert_eq!(tab(Edge::Right, Align::Top), r(1914, 0));
+        assert_eq!(tab(Edge::Right, Align::Center), r(1914, 516));
+        assert_eq!(tab(Edge::Right, Align::Bottom), r(1914, 1032));
+        assert_eq!(tab(Edge::Left, Align::Top), r(0, 0));
+        assert_eq!(tab(Edge::Left, Align::Center), r(0, 516));
+        assert_eq!(tab(Edge::Left, Align::Bottom), r(0, 1032));
+    }
+
+    #[test]
+    fn the_tab_grows_with_the_monitor_scale() {
+        let r = tab_rect(Edge::Right, Align::Center, SCREEN, 1.5);
+        assert_eq!(
+            r,
+            ScreenRect {
+                left: 1911,
+                top: 504,
+                right: 1920,
+                bottom: 576
+            }
+        );
     }
 }
