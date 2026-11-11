@@ -5,7 +5,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::io;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
 use shelve_core::{Edge, ScreenRect};
@@ -41,7 +41,7 @@ const WM_PLACE_SENSOR: u32 = WM_APP + 1;
 const WM_HIDE_SENSOR: u32 = WM_APP + 2;
 
 thread_local! {
-    static TX: RefCell<Option<Sender<HookEvent>>> = const { RefCell::new(None) };
+    static ON_EVENT: RefCell<Option<OnHookEvent>> = const { RefCell::new(None) };
     static HELD: Cell<Held> = const { Cell::new(Held { left: false, right: false }) };
     static SENSOR: Cell<isize> = const { Cell::new(0) };
     /// Monitor the strip currently sits on; 0 while hidden.
@@ -82,10 +82,13 @@ impl Held {
     }
 }
 
+/// Called on the hook thread for every event; must return fast.
+pub type OnHookEvent = Box<dyn Fn(HookEvent) + Send>;
+
 fn send(e: HookEvent) {
-    TX.with(|t| {
-        if let Some(tx) = t.borrow().as_ref() {
-            let _ = tx.send(e);
+    ON_EVENT.with(|f| {
+        if let Some(f) = f.borrow().as_ref() {
+            f(e);
         }
     });
 }
@@ -107,11 +110,12 @@ impl Drop for MouseHook {
     }
 }
 
-pub fn start_mouse_hook(edge: Edge, zone_px: u32, tx: Sender<HookEvent>) -> io::Result<MouseHook> {
+/// `on_event` hands each event on; the receiver outlives a restart of the hook.
+pub fn start_mouse_hook(edge: Edge, zone_px: u32, on_event: OnHookEvent) -> io::Result<MouseHook> {
     let (init_tx, init_rx) = mpsc::sync_channel(1);
     let thread = thread::Builder::new()
         .name("mouse-hook".into())
-        .spawn(move || run(edge, zone_px, tx, init_tx))?;
+        .spawn(move || run(edge, zone_px, on_event, init_tx))?;
     let thread_id = init_rx
         .recv()
         .map_err(io::Error::other)?
@@ -125,10 +129,10 @@ pub fn start_mouse_hook(edge: Edge, zone_px: u32, tx: Sender<HookEvent>) -> io::
 fn run(
     edge: Edge,
     zone_px: u32,
-    tx: Sender<HookEvent>,
+    on_event: OnHookEvent,
     init: mpsc::SyncSender<windows::core::Result<u32>>,
 ) {
-    TX.with(|t| *t.borrow_mut() = Some(tx));
+    ON_EVENT.with(|f| *f.borrow_mut() = Some(on_event));
     EDGE.set(edge);
     ZONE.set(zone_px.max(1) as i32);
     let setup = unsafe {

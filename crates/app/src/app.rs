@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Instant;
 
 use eframe::egui;
-use shelve_core::{default_config_path, Config, Edge, ItemKind, ScreenRect, Shelf, ShelfItem};
+use shelve_core::{
+    default_config_path, Command, Config, Edge, ItemKind, ScreenRect, Shelf, ShelfItem,
+};
 
+use crate::auto_show::AutoShowInput;
 use crate::presence::{self, is_missing, Presence};
 use crate::shelf_view::{shelf_view, Action};
 use shelve_platform::{
@@ -40,6 +43,8 @@ pub struct ShelfApp {
     /// Dropping it stops the platform thread and removes the tray icon.
     pub platform: Option<PlatformHandle>,
     pub mouse_hook: Option<MouseHook>,
+    /// The thread that alone decides whether the shelf is shown (`auto_show`).
+    pub auto_show: Sender<AutoShowInput>,
     pub settings: Settings,
     /// None: the shell had no icon, the drawn glyph is used.
     /// Note: never pruned; a few KB per path ever dropped in one session.
@@ -71,22 +76,17 @@ pub struct ShelfApp {
     pub file_over: bool,
 }
 
-/// Starts the mouse hook, edge sensor and its Show/Hide thread; None if auto_show is off.
-pub fn start_auto_show(
-    cfg: &Config,
-    tx: Sender<PlatformEvent>,
-    shared: SharedRect,
-) -> Option<MouseHook> {
+/// Starts the mouse hook and edge sensor; None if "show while dragging" is off. Its events
+/// go to the `auto_show` thread, which outlives the hook: a restart keeps the shelf state.
+pub fn start_mouse_hook(cfg: &Config, auto_show: Sender<AutoShowInput>) -> Option<MouseHook> {
     if !cfg.auto_show {
         return None;
     }
-    let (hook_tx, hook_rx) = mpsc::channel();
-    let auto_cfg = cfg.clone();
-    std::thread::spawn(move || {
-        crate::auto_show::run(hook_rx, auto_cfg, tx, shared, shelve_platform::cursor_state)
+    let on_event = Box::new(move |e| {
+        let _ = auto_show.send(AutoShowInput::Hook(e));
     });
     // Without the hook only the hotkey and tray show the shelf.
-    shelve_platform::start_mouse_hook(cfg.edge, cfg.edge_zone_px, hook_tx)
+    shelve_platform::start_mouse_hook(cfg.edge, cfg.edge_zone_px, on_event)
         .inspect_err(|e| println!("mouse hook failed: {e}"))
         .ok()
 }
@@ -188,6 +188,10 @@ impl ShelfApp {
         }
     }
 
+    fn command(&self, command: Command) {
+        let _ = self.auto_show.send(AutoShowInput::Command(command));
+    }
+
     fn hotkey_status(&self) -> Option<HotkeyStatus> {
         self.platform.as_ref().map(|p| p.hotkey_status().clone())
     }
@@ -199,8 +203,7 @@ impl ShelfApp {
         }
         if changes.hook {
             self.mouse_hook = None; // joins the old hook thread first
-            self.mouse_hook =
-                start_auto_show(&self.cfg, self.platform_tx.clone(), self.shared.clone());
+            self.mouse_hook = start_mouse_hook(&self.cfg, self.auto_show.clone());
         }
         if changes.hotkey || changes.lang {
             self.platform = None; // releases the old hotkey before registering the new one
@@ -261,8 +264,10 @@ impl eframe::App for ShelfApp {
             // Every way to show the shelf arrives here as an event, so it never opens stale.
             self.refresh_look(ctx);
             match ev {
-                PlatformEvent::Hotkey | PlatformEvent::TrayToggle => self.set_visible(!self.target),
-                PlatformEvent::ShowExisting | PlatformEvent::EdgeShow => self.set_visible(true),
+                // Asked for, not done here: the auto_show thread decides and answers.
+                PlatformEvent::Hotkey | PlatformEvent::TrayToggle => self.command(Command::Toggle),
+                PlatformEvent::ShowExisting => self.command(Command::ShowExisting),
+                PlatformEvent::EdgeShow => self.set_visible(true),
                 PlatformEvent::EdgeHide => self.set_visible(false),
                 PlatformEvent::TrayClear => self.shelf.clear(),
                 PlatformEvent::TraySettings => self.settings.open(&self.cfg, self.hotkey_status()),

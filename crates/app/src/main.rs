@@ -85,7 +85,22 @@ fn main() -> eframe::Result {
                     })
                 })?;
             let shared = layout::SharedRect::default();
-            let mouse_hook = app::start_auto_show(&cfg, platform_tx.clone(), shared.clone());
+            // Lives to the end: restarting the hook or the tray never resets the shelf state.
+            let (auto_show, auto_show_rx) = mpsc::channel();
+            let (tx, rect) = (platform_tx.clone(), shared.clone());
+            let hide_delay_ms = cfg.hide_delay_ms;
+            std::thread::Builder::new()
+                .name("auto-show".into())
+                .spawn(move || {
+                    auto_show::run(
+                        auto_show_rx,
+                        hide_delay_ms,
+                        tx,
+                        rect,
+                        shelve_platform::cursor_state,
+                    )
+                })?;
+            let mouse_hook = app::start_mouse_hook(&cfg, auto_show.clone());
             let platform = shelve_platform::start(&cfg, platform_tx.clone())?;
             println!("hotkey {}: {:?}", cfg.hotkey, platform.hotkey_status());
             if cfg.autostart {
@@ -106,6 +121,7 @@ fn main() -> eframe::Result {
                 release_pointer: None,
                 platform: Some(platform),
                 mouse_hook,
+                auto_show,
                 icons: HashMap::new(),
                 presence: HashMap::new(),
                 presence_queue,
