@@ -28,7 +28,6 @@ pub struct Config {
     pub autostart: bool,
     pub auto_show: bool,
     pub edge_zone_px: u32,
-    pub edge_dwell_ms: u32,
     pub hide_delay_ms: u32,
     pub lang: Lang,
 }
@@ -42,7 +41,6 @@ impl Default for Config {
             autostart: false,
             auto_show: true,
             edge_zone_px: 4,
-            edge_dwell_ms: 250,
             hide_delay_ms: 1500,
             lang: Lang::En,
         }
@@ -154,6 +152,12 @@ mod tests {
                 ..Config::default()
             }
         );
+    }
+
+    #[test]
+    fn a_config_with_the_removed_dwell_setting_still_loads() {
+        let c = load_with_content("dwell", r#"{"edge":"left","edge_dwell_ms":250}"#);
+        assert_eq!(c.edge, Edge::Left);
     }
 
     #[test]

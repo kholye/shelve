@@ -15,9 +15,10 @@ use std::thread::{self, JoinHandle};
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use shelve_core::{Config, Lang};
 use tray_icon::menu::MenuEvent;
-use tray_icon::TrayIconEvent;
+use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 use windows::Win32::Foundation::{CloseHandle, LPARAM, WAIT_OBJECT_0, WPARAM};
 use windows::Win32::System::Threading::{GetCurrentThreadId, INFINITE};
+use windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MsgWaitForMultipleObjects, PeekMessageW, PostThreadMessageW,
     TranslateMessage, MSG, PM_REMOVE, QS_ALLINPUT, WM_QUIT,
@@ -119,6 +120,8 @@ fn run(hotkey: &str, lang: Lang, tx: Sender<PlatformEvent>, init: mpsc::SyncSend
     let mut handles = vec![show_event];
     handles.extend(watches.iter().map(KeyWatch::event));
 
+    let mut tray_clicks = tray::ClickFilter::default();
+    let started = std::time::Instant::now();
     let mut msg = MSG::default();
     'outer: loop {
         let wait =
@@ -164,8 +167,22 @@ fn run(hotkey: &str, lang: Lang, tx: Sender<PlatformEvent>, init: mpsc::SyncSend
         while let Ok(e) = MenuEvent::receiver().try_recv() {
             out.extend(tray::event_for(&e.id));
         }
-        // Not used yet, drained so the unbounded channel does not grow.
-        while TrayIconEvent::receiver().try_recv().is_ok() {}
+        // Every tray event is drained, so the unbounded channel does not grow. DoubleClick
+        // comes on its own and is skipped; the filter drops its second Up.
+        while let Ok(e) = TrayIconEvent::receiver().try_recv() {
+            let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            else {
+                continue;
+            };
+            let now = started.elapsed().as_millis() as u64;
+            if tray_clicks.accept(now, unsafe { GetDoubleClickTime() } as u64) {
+                out.push(PlatformEvent::TrayToggle);
+            }
+        }
         if out.into_iter().any(|e| tx.send(e).is_err()) {
             break;
         }

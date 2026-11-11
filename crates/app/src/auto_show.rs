@@ -5,7 +5,7 @@
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
-use shelve_core::{Config, EdgeEvent, EdgeTrigger, ScreenRect};
+use shelve_core::{Config, EdgeEvent, EdgeTrigger};
 use shelve_platform::{HookEvent, MouseSample, PlatformEvent};
 
 use crate::layout::SharedRect;
@@ -24,14 +24,7 @@ pub fn run(
     cursor: impl Fn() -> MouseSample,
 ) {
     let start = Instant::now();
-    let unused = ScreenRect {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-    };
-    // Zone 0: the dwell path never fires; showing is the sensor's job (show_now).
-    let mut trigger = EdgeTrigger::new(cfg.edge, unused, 0, 0, cfg.hide_delay_ms);
+    let mut trigger = EdgeTrigger::new(cfg.hide_delay_ms);
     let mut shown = false;
     loop {
         let event = if shown {
@@ -77,6 +70,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shelve_core::ScreenRect;
     use std::sync::mpsc;
 
     const SHELF: ScreenRect = ScreenRect {
