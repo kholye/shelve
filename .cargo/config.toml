@@ -1,0 +1,9 @@
+# llvm-mingw builds: link libunwind and the C++ runtime statically so the exe
+# runs without llvm-mingw DLLs next to it.
+[target.x86_64-pc-windows-gnullvm]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# MSVC builds (CI, releases): link the C runtime statically, so the exe runs on a
+# clean Windows without the Visual C++ redistributable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

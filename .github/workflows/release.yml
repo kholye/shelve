@@ -1,0 +1,38 @@
+name: Release
+
+# A tag like v0.1.0 builds shelve.exe and attaches it to a draft release.
+# The draft is published by hand after the notes are filled in.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  # rust-toolchain.toml pins gnullvm for local llvm-mingw builds; CI runners have MSVC.
+  RUSTUP_TOOLCHAIN: stable-x86_64-pc-windows-msvc
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal
+      - name: Tag matches the version in Cargo.toml
+        shell: bash
+        run: grep -q "^version = \"${GITHUB_REF_NAME#v}\"$" crates/app/Cargo.toml
+      - run: cargo test --workspace --locked
+      - run: cargo build --release --locked
+      - name: Checksum
+        shell: bash
+        run: cd target/release && sha256sum shelve.exe > shelve.exe.sha256 && cat shelve.exe.sha256
+      - name: Draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          target/release/shelve.exe target/release/shelve.exe.sha256
+          --draft --title "Shelve $GITHUB_REF_NAME" --notes "Notes to follow."

@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  # rust-toolchain.toml pins gnullvm for local llvm-mingw builds; CI runners have MSVC.
+  RUSTUP_TOOLCHAIN: stable-x86_64-pc-windows-msvc
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --component clippy,rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
