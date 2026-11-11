@@ -79,8 +79,8 @@ fn main() -> eframe::Result {
             std::thread::Builder::new()
                 .name("presence".into())
                 .spawn(move || {
-                    checker.run(|path, a| {
-                        let _ = answer_tx.send((path, a));
+                    checker.run(|answer| {
+                        let _ = answer_tx.send(answer);
                         ctx.request_repaint();
                     })
                 })?;
@@ -103,7 +103,7 @@ fn main() -> eframe::Result {
                 target: false,
                 slide_start: Instant::now(),
                 slide_from: 1.0,
-                release_pointer: false,
+                release_pointer: None,
                 platform: Some(platform),
                 mouse_hook,
                 icons: HashMap::new(),

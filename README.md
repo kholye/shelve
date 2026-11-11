@@ -6,7 +6,7 @@ A file shelf at the edge of the screen, for Windows 10 and 11.
 
 Start dragging a file, bring it to the edge of the screen, and a small panel slides out. Drop the file there. Then open the folder or the program it should go to and drag it off the shelf.
 
-The shelf only remembers where the files are. Nothing is copied or moved until you drag an item out, and what you drag out is a copy.
+The shelf only remembers where the files are. Nothing is copied or moved until you drag an item out. Dragged out with the left mouse button, it moves; hold Ctrl when you let go to get a copy.
 
 На русском: [README.ru.md](README.ru.md)
 
@@ -23,7 +23,10 @@ Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off 
 ![The shelf with four items](docs/shelf.png)
 
 - **Put a file on it.** Drag a file or a folder to the screen edge (the right one by default) and drop it on the shelf when it slides out. `Ctrl+Alt+D` or "Show/hide" in the tray menu opens the shelf without dragging anything.
-- **Take a file off it.** Drag a row into a folder, onto the desktop or into a program window. The file is copied and the row stays on the shelf.
+- **Take a file off it.** Drag a row into a folder or onto the desktop with the left mouse button and the file moves there. Its row leaves the shelf once Explorer has finished moving it: usually at once, for a big file going to another drive when the copying is done. Shelve itself never deletes anything.
+- **Copy instead.** Hold Ctrl when you let go: the file is copied and the row stays. The header reminds of it: "3 items · Ctrl: copy". Dragged with the right mouse button, the file brings up the Windows menu on the drop (Copy here, Move here); click the one you want.
+- A program window (a messenger, a browser) takes the file the way the program decides, usually as a copy.
+- A row dropped on the Recycle Bin window sends the file to the Recycle Bin, and the row leaves the shelf. Explorer does that, not Shelve; the file can be restored from the Recycle Bin.
 - **Remove a row.** Point at it and click the cross on the right. "Clear" in the header removes all rows. The files themselves are not touched.
 - A file that was deleted or renamed in the meantime is shown grey and struck through. It cannot be dragged out; a click removes its row.
 - A shelf that came out for a drag hides again once you let go of the mouse button and move away. A shelf opened with the hotkey stays until you press the hotkey again.

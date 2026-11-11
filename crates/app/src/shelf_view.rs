@@ -3,9 +3,12 @@
 
 use std::time::Instant;
 
-use eframe::egui::{self, pos2, vec2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke};
+use eframe::egui::{
+    self, pos2, vec2, Color32, FontId, PointerButton, Pos2, Rect, Sense, Shape, Stroke,
+};
 use eframe::epaint::text::{LayoutJob, TextFormat, TextWrapping};
 use shelve_core::{ItemKind, Lang, ShelfItem, Text};
+use shelve_platform::DragButton;
 
 use crate::labels::folder_label;
 use crate::layout::{HEADER_H, PAD_BOTTOM, RADIUS, ROW_H};
@@ -25,8 +28,8 @@ pub enum Action {
     Remove(std::path::PathBuf),
     Clear,
     OpenSettings,
-    /// The user started dragging this row out of the shelf.
-    DragOut(ShelfItem),
+    /// The user started dragging this row out of the shelf with this button.
+    DragOut(ShelfItem, DragButton),
 }
 
 /// Draws the shelf into `ui` (the inside of the panel). `rows` are the items of the
@@ -133,16 +136,31 @@ fn remove_rect(row: Rect) -> Rect {
     )
 }
 
+/// "3 items · Ctrl: copy": the counter, then the hint, so the hint is cut first.
+fn header_text(count: &str, t: &Text) -> String {
+    format!("{count} · {}", t.ctrl_copy)
+}
+
+/// The header line, cut with an ellipsis so it ends 8 points before `clear_left`.
+fn header_line(
+    ui: &egui::Ui,
+    rect: Rect,
+    count: &str,
+    t: &Text,
+    clear_left: f32,
+    color: Color32,
+) -> std::sync::Arc<egui::Galley> {
+    let format = TextFormat {
+        font_id: FontId::proportional(12.0),
+        color,
+        ..Default::default()
+    };
+    let width = (clear_left - 8.0 - (rect.left() + 12.0)).max(0.0);
+    one_line(ui, header_text(count, t), format, width)
+}
+
 fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> Option<Action> {
     let small = FontId::proportional(12.0);
-    ui.painter().text(
-        pos2(rect.left() + 12.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        count,
-        small.clone(),
-        p.text_weak,
-    );
-
     let gear = gear_rect(rect);
     let gear_resp = ui
         .interact(gear, ui.scope_id().with("settings"), Sense::click())
@@ -167,6 +185,11 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
     }
     ui.painter()
         .galley(clear.center() - label.size() / 2.0, label, p.accent);
+
+    let line = header_line(ui, rect, count, t, clear.left(), p.text_weak);
+    let top = rect.center().y - line.size().y / 2.0;
+    ui.painter()
+        .galley(pos2(rect.left() + 12.0, top), line, p.text_weak);
 
     if gear_resp.clicked() {
         Some(Action::OpenSettings)
@@ -300,10 +323,14 @@ fn row(
 
     if remove {
         Some(Action::Remove(item.path.clone()))
-    } else if resp.drag_started() && !missing {
-        Some(Action::DragOut(item.clone()))
-    } else {
+    } else if missing {
         None
+    } else if resp.drag_started_by(PointerButton::Primary) {
+        Some(Action::DragOut(item.clone(), DragButton::Left))
+    } else if resp.drag_started_by(PointerButton::Secondary) {
+        Some(Action::DragOut(item.clone(), DragButton::Right))
+    } else {
+        None // the middle button does not drag files out
     }
 }
 
@@ -493,6 +520,17 @@ mod tests {
         file_over: bool,
         events: Vec<egui::Event>,
     ) -> Option<Action> {
+        pass_in(ctx, items, presence, file_over, Lang::En, events)
+    }
+
+    fn pass_in(
+        ctx: &egui::Context,
+        items: &[ShelfItem],
+        presence: &Presence,
+        file_over: bool,
+        lang: Lang,
+        events: Vec<egui::Event>,
+    ) -> Option<Action> {
         let input = egui::RawInput {
             screen_rect: Some(PANEL),
             events,
@@ -504,7 +542,7 @@ mod tests {
         let mut rows = Rows::default();
         rows.sync(items, now, false);
         let mut out = ctx.run_ui(input, |ui| {
-            let look = (&p, file_over, Lang::En);
+            let look = (&p, file_over, lang);
             action = shelf_view(ui, &rows, now, look, presence, &mut |_| None);
         });
         out.textures_delta.clear();
@@ -612,18 +650,102 @@ mod tests {
         assert_eq!(click(&items, at), Some(Action::Remove(missing().path)));
     }
 
-    #[test]
-    fn dragging_a_row_starts_a_drag_out() {
+    /// Presses `which` on row 1 and moves away; returns what the move produced.
+    fn drag_row_with(which: egui::PointerButton) -> Option<Action> {
         let items = existing(2);
         let at = row_rect(1).left_center() + vec2(60.0, 0.0);
         let ctx = egui::Context::default();
         pass(&ctx, &items, false, vec![]);
         pass(&ctx, &items, false, vec![egui::Event::PointerMoved(at)]);
-        pass(&ctx, &items, false, vec![button(at, true)]);
+        let press = egui::Event::PointerButton {
+            pos: at,
+            button: which,
+            pressed: true,
+            modifiers: Default::default(),
+        };
+        pass(&ctx, &items, false, vec![press]);
         let moved = egui::Event::PointerMoved(at - vec2(40.0, 0.0));
+        pass(&ctx, &items, false, vec![moved])
+    }
+
+    #[test]
+    fn dragging_a_row_starts_a_drag_out() {
+        let item = existing(2).remove(1);
         assert_eq!(
-            pass(&ctx, &items, false, vec![moved]),
-            Some(Action::DragOut(items[1].clone()))
+            drag_row_with(egui::PointerButton::Primary),
+            Some(Action::DragOut(item, DragButton::Left))
+        );
+    }
+
+    #[test]
+    fn dragging_a_row_with_the_right_button_says_so() {
+        // Explorer then shows its Copy / Move menu on the drop.
+        let item = existing(2).remove(1);
+        assert_eq!(
+            drag_row_with(egui::PointerButton::Secondary),
+            Some(Action::DragOut(item, DragButton::Right))
+        );
+    }
+
+    #[test]
+    fn the_middle_button_does_not_drag_a_row_out() {
+        assert_eq!(drag_row_with(egui::PointerButton::Middle), None);
+    }
+
+    #[test]
+    fn a_long_header_keeps_clear_and_the_gear_clickable() {
+        // 999 items in Russian: the counter and the Ctrl hint are the longest they get.
+        let many: Vec<ShelfItem> = (0..999)
+            .map(|i| ShelfItem {
+                path: PathBuf::from(format!(r"C:\shelve-нет\{i}.txt")),
+                kind: ItemKind::File,
+            })
+            .collect();
+        let none = Presence::new();
+        let click_ru = |at: Pos2| {
+            let ctx = egui::Context::default();
+            let run = |events| pass_in(&ctx, &many, &none, false, Lang::Ru, events);
+            run(vec![]);
+            run(vec![egui::Event::PointerMoved(at)]);
+            run(vec![button(at, true)]);
+            run(vec![button(at, false)])
+        };
+        let gear = gear_rect(header_rect(PANEL));
+        assert_eq!(click_ru(gear.center()), Some(Action::OpenSettings));
+        assert_eq!(
+            click_ru(gear.left_center() - vec2(20.0, 0.0)),
+            Some(Action::Clear)
+        );
+    }
+
+    #[test]
+    fn a_long_header_line_is_cut_before_clear() {
+        let ctx = egui::Context::default();
+        let rect = header_rect(PANEL);
+        let clear_left = 150.0;
+        let mut width = 0.0;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let count = Lang::Ru.count(999);
+            let line = header_line(ui, rect, &count, Lang::Ru.text(), clear_left, Color32::GRAY);
+            width = line.size().x;
+        });
+        out.textures_delta.clear();
+        assert!(width > 0.0);
+        assert!(
+            rect.left() + 12.0 + width <= clear_left - 8.0,
+            "the line runs under Clear: {width}"
+        );
+    }
+
+    #[test]
+    fn the_header_line_ends_with_the_ctrl_hint() {
+        assert_eq!(
+            header_text("3 объекта", Lang::Ru.text()),
+            "3 объекта · Ctrl — копия"
+        );
+        assert_eq!(
+            header_text("3 items", Lang::En.text()),
+            "3 items · Ctrl: copy"
         );
     }
 

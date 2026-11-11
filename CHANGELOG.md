@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A row dragged off the shelf with the left mouse button moves the file. Ctrl makes a copy, and the right button brings up the Windows Copy / Move menu. The row leaves the shelf once Explorer has moved the file. The header shows the Ctrl hint.
+
 ## 0.1.0
 
 First public release.

@@ -4,13 +4,13 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Instant;
 
 use eframe::egui;
-use shelve_core::{
-    default_config_path, Availability, Config, Edge, ItemKind, ScreenRect, Shelf, ShelfItem,
-};
+use shelve_core::{default_config_path, Config, Edge, ItemKind, ScreenRect, Shelf, ShelfItem};
 
 use crate::presence::{self, is_missing, Presence};
 use crate::shelf_view::{shelf_view, Action};
-use shelve_platform::{HotkeyStatus, MouseHook, PlatformEvent, PlatformHandle, SystemLook};
+use shelve_platform::{
+    DragButton, DragOutcome, HotkeyStatus, MouseHook, PlatformEvent, PlatformHandle, SystemLook,
+};
 
 use crate::layout::{self, SharedRect};
 use crate::rows::{ease_out, Glide, Rows, ANIM_S};
@@ -35,8 +35,8 @@ pub struct ShelfApp {
     pub slide_start: Instant,
     /// Offset at `slide_start`: 0 = fully in, 1 = fully behind the edge.
     pub slide_from: f32,
-    /// OLE ate the mouse-up during DoDragDrop; egui still thinks the button is held.
-    pub release_pointer: bool,
+    /// OLE ate the mouse-up during DoDragDrop; egui still thinks this button is held.
+    pub release_pointer: Option<egui::PointerButton>,
     /// Dropping it stops the platform thread and removes the tray icon.
     pub platform: Option<PlatformHandle>,
     pub mouse_hook: Option<MouseHook>,
@@ -48,7 +48,7 @@ pub struct ShelfApp {
     pub presence: Presence,
     /// Asks the presence thread; its answers come back on `presence_answers`.
     pub presence_queue: presence::Queue,
-    pub presence_answers: Receiver<(PathBuf, Availability)>,
+    pub presence_answers: Receiver<presence::Answer>,
     /// What Windows looked like when `palette` was made.
     pub look: SystemLook,
     pub palette: Palette,
@@ -246,7 +246,16 @@ impl eframe::App for ShelfApp {
 
     // Runs even while the window is hidden, whenever the platform thread calls request_repaint.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.presence.extend(self.presence_answers.try_iter());
+        for a in self.presence_answers.try_iter() {
+            if presence::remove_after_drop(a.after_drop, a.availability) {
+                // Explorer moved it away; the shelf deletes nothing itself.
+                println!("moved away: {}", a.path.display());
+                self.shelf.remove(&a.path);
+                self.presence.remove(&a.path);
+            } else {
+                self.presence.insert(a.path, a.availability);
+            }
+        }
         while let Ok(ev) = self.events.try_recv() {
             println!("event {ev:?}");
             // Every way to show the shelf arrives here as an event, so it never opens stale.
@@ -269,11 +278,11 @@ impl eframe::App for ShelfApp {
     }
 
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        if std::mem::take(&mut self.release_pointer) {
+        if let Some(button) = self.release_pointer.take() {
             let pos = ctx.input(|i| i.pointer.latest_pos()).unwrap_or_default();
             raw_input.events.push(egui::Event::PointerButton {
                 pos,
-                button: egui::PointerButton::Primary,
+                button,
                 pressed: false,
                 modifiers: Default::default(),
             });
@@ -443,14 +452,21 @@ impl ShelfApp {
             }
             Some(Action::Clear) => self.shelf.clear(),
             Some(Action::OpenSettings) => self.settings.open(&self.cfg, self.hotkey_status()),
-            Some(Action::DragOut(item)) => {
+            Some(Action::DragOut(item, button)) => {
                 let paths = drag_candidates(std::slice::from_ref(&item), &self.presence);
                 if !paths.is_empty() {
-                    let res = shelve_platform::start_drag_out(&paths);
-                    println!("drag_out {res:?}");
-                    self.release_pointer = true;
+                    let res = shelve_platform::start_drag_out(&paths, button);
+                    println!("drag_out {button:?} {res:?}");
+                    self.release_pointer = Some(match button {
+                        DragButton::Left => egui::PointerButton::Primary,
+                        DragButton::Right => egui::PointerButton::Secondary,
+                    });
                     ui.ctx().request_repaint();
-                    self.presence_queue.check(item.path);
+                    match res {
+                        // Explorer may move it only later: watch until it goes or time is up.
+                        Ok(DragOutcome::Dropped) => self.presence_queue.watch(item.path),
+                        _ => self.presence_queue.check(item.path),
+                    }
                 }
             }
             None => {}
@@ -480,6 +496,7 @@ pub fn drag_candidates(items: &[ShelfItem], presence: &Presence) -> Vec<PathBuf>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shelve_core::Availability;
 
     /// Runs a pass with `events`; returns whether the button inside `slide` was clicked.
     fn click_pass(ctx: &egui::Context, dx: f32, events: Vec<egui::Event>) -> bool {

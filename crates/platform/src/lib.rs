@@ -35,11 +35,23 @@ pub enum HotkeyStatus {
     Failed(HotkeyError),
 }
 
-/// How a drag-out ended. The shelf only offers copy, so there is no "moved".
+/// How a drag-out ended. Whether the file was copied or moved is not known here: Explorer
+/// often moves it after the drop, and its answer about that is unreliable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DragOutcome {
-    Copied,
+    /// The button was let go over a window. Copied, moved, or refused: Explorer reports
+    /// no effect after a move too, so whether the file left is found out by watching it.
+    Dropped,
     Cancelled,
+}
+
+/// The mouse button a row is dragged off the shelf with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragButton {
+    /// Moves; Ctrl makes a copy.
+    Left,
+    /// Explorer shows its Copy / Move menu on the drop.
+    Right,
 }
 
 /// Where the mouse is, in physical screen pixels: from the hook or read directly.
