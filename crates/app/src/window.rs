@@ -1,6 +1,6 @@
 use eframe::egui;
 use shelve_core::{Align, Edge, ScreenRect};
-use shelve_platform::{icon_rgba, IconStyle};
+use shelve_platform::{icon_rgba, IconStyle, TAB_SIZE};
 
 const ICON_SIZE: u32 = 32;
 
@@ -40,9 +40,6 @@ pub fn shelf_rect(
         bottom: top + h,
     }
 }
-
-/// Tab size in points: the strip left at the screen edge while a shelf with files is hidden.
-const TAB_SIZE: (f32, f32) = (6.0, 48.0);
 
 /// Where the tab goes: on the shelf's edge, at the shelf's height, physical pixels.
 pub fn tab_rect(edge: Edge, align: Align, screen: ScreenRect, scale: f32) -> ScreenRect {
@@ -111,12 +108,12 @@ mod tests {
         let r = |left, top| ScreenRect {
             left,
             top,
-            right: left + 6,
+            right: left + 12,
             bottom: top + 48,
         };
-        assert_eq!(tab(Edge::Right, Align::Top), r(1914, 0));
-        assert_eq!(tab(Edge::Right, Align::Center), r(1914, 516));
-        assert_eq!(tab(Edge::Right, Align::Bottom), r(1914, 1032));
+        assert_eq!(tab(Edge::Right, Align::Top), r(1908, 0));
+        assert_eq!(tab(Edge::Right, Align::Center), r(1908, 516));
+        assert_eq!(tab(Edge::Right, Align::Bottom), r(1908, 1032));
         assert_eq!(tab(Edge::Left, Align::Top), r(0, 0));
         assert_eq!(tab(Edge::Left, Align::Center), r(0, 516));
         assert_eq!(tab(Edge::Left, Align::Bottom), r(0, 1032));
@@ -128,7 +125,7 @@ mod tests {
         assert_eq!(
             r,
             ScreenRect {
-                left: 1911,
+                left: 1902,
                 top: 504,
                 right: 1920,
                 bottom: 576

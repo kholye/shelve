@@ -29,7 +29,7 @@ Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off 
 - A row dropped on the Recycle Bin window sends the file to the Recycle Bin, and the row leaves the shelf. Explorer does that, not Shelve; the file can be restored from the Recycle Bin.
 - **Remove a row.** Point at it and click the cross on the right. "Clear" in the header removes all rows. The files themselves are not touched.
 - A file that was deleted or renamed in the meantime is shown grey and struck through. It cannot be dragged out; a click removes its row.
-- **Bring it back.** While the shelf is hidden with files on it, a short strip in the accent colour stays at the screen edge, where the shelf is. Rest the mouse on it for a moment or click it, and the shelf comes out. A mouse just passing by does not open it. A left click on the tray icon or `Ctrl+Alt+D` also opens the shelf and closes it again; a right click on the tray icon opens its menu.
+- **Bring it back.** While the shelf is hidden with files on it, a small tab in the shelf's colours, with an arrow pointing into the screen, stays at the screen edge where the shelf is. It lights up in the accent colour under the mouse. Rest the mouse on it for a moment or click it, and the shelf comes out. A mouse just passing by does not open it. A left click on the tray icon or `Ctrl+Alt+D` also opens the shelf and closes it again; a right click on the tray icon opens its menu.
 - The shelf hides by itself once the mouse buttons are up, the cursor is off the shelf, and a second and a half has passed. A shelf opened with the hotkey or from the tray waits until the cursor has been on it at least once, so it does not hide while you move the mouse over to it.
 - The shelf starts empty every time Shelve is started.
 

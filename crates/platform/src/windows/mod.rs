@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
-use shelve_core::{Config, Lang, ScreenRect};
+use shelve_core::{Config, Lang};
 use tray_icon::menu::MenuEvent;
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 use windows::Win32::Foundation::{CloseHandle, LPARAM, WAIT_OBJECT_0, WPARAM};
@@ -26,14 +26,14 @@ use windows::Win32::UI::WindowsAndMessaging::{
     TranslateMessage, MSG, PM_REMOVE, QS_ALLINPUT, WM_APP, WM_QUIT,
 };
 
-use crate::{HotkeyStatus, PlatformEvent};
+use crate::{HotkeyStatus, PlatformEvent, TabSpec};
 use system_look::KeyWatch;
 
 /// Thread message: show or hide the tab where `PlatformHandle::set_tab` put it.
 const WM_PLACE_TAB: u32 = WM_APP + 1;
 
 /// Where the tab should be; None hides it.
-type TabPlace = Arc<Mutex<Option<ScreenRect>>>;
+type TabPlace = Arc<Mutex<Option<TabSpec>>>;
 
 pub use autostart::{is_autostart, set_autostart};
 pub use drag_out::start_drag_out;
@@ -61,9 +61,9 @@ impl PlatformHandle {
         &self.hotkey_status
     }
 
-    /// Shows the tab at `rect` (physical pixels), or hides it with None.
-    pub fn set_tab(&self, rect: Option<ScreenRect>) {
-        *self.tab.lock().unwrap() = rect;
+    /// Shows the tab as `spec` says, or hides it with None.
+    pub fn set_tab(&self, spec: Option<TabSpec>) {
+        *self.tab.lock().unwrap() = spec;
         unsafe {
             let _ = PostThreadMessageW(self.thread_id, WM_PLACE_TAB, WPARAM(0), LPARAM(0));
         }
@@ -164,9 +164,6 @@ fn run(
                 if dark != taskbar_dark {
                     taskbar_dark = dark;
                     let _ = tray.set_icon(tray::icon(dark).ok());
-                }
-                if let Some(tab) = &tab {
-                    tab.repaint(); // the accent colour may have changed
                 }
                 Some(PlatformEvent::ThemeChanged)
             }

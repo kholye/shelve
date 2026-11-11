@@ -2,8 +2,11 @@
 mod windows;
 
 mod icon;
+mod tab_paint;
 pub use icon::{icon_rgba, IconStyle};
 pub use shelve_core::HotkeyError;
+use shelve_core::{Edge, ScreenRect};
+pub use tab_paint::{tab_pixels, TabColors, TAB_SIZE};
 
 #[cfg(windows)]
 pub use crate::windows::{
@@ -54,6 +57,18 @@ pub enum DragButton {
     Left,
     /// Explorer shows its Copy / Move menu on the drop.
     Right,
+}
+
+/// Where the tab at the screen edge goes and how it looks.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TabSpec {
+    /// Physical pixels.
+    pub rect: ScreenRect,
+    /// The screen edge it sits on; its arrow points away from it.
+    pub edge: Edge,
+    /// DPI scale of the monitor.
+    pub scale: f32,
+    pub colors: TabColors,
 }
 
 /// Where the mouse is, in physical screen pixels: from the hook or read directly.

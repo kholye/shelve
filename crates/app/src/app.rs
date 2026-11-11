@@ -13,6 +13,7 @@ use crate::presence::{self, is_missing, Presence};
 use crate::shelf_view::{shelf_view, Action};
 use shelve_platform::{
     DragButton, DragOutcome, HotkeyStatus, MouseHook, PlatformEvent, PlatformHandle, SystemLook,
+    TabColors, TabSpec,
 };
 
 use crate::layout::{self, SharedRect};
@@ -74,8 +75,8 @@ pub struct ShelfApp {
     pub shared: SharedRect,
     /// A file is being carried over the shelf right now.
     pub file_over: bool,
-    /// Where the tab was last put; None while it is hidden.
-    pub tab: Option<ScreenRect>,
+    /// What the tab was last told; None while it is hidden.
+    pub tab: Option<TabSpec>,
 }
 
 /// Starts the mouse hook and edge sensor; None if "show while dragging" is off. Its events
@@ -192,10 +193,15 @@ impl ShelfApp {
     }
 
     /// The tab shows while the shelf is hidden and has files, at the shelf's place on the
-    /// monitor it was last shown on. Tells the platform thread only when that changes.
+    /// monitor it was last shown on, in the shelf's colours. Tells the platform thread
+    /// only when that changes, a Windows theme change included.
     fn sync_tab(&mut self) {
-        let want = (!self.visible && !self.shelf.items().is_empty())
-            .then(|| tab_rect(self.cfg.edge, self.cfg.align, self.screen, self.scale));
+        let want = (!self.visible && !self.shelf.items().is_empty()).then(|| TabSpec {
+            rect: tab_rect(self.cfg.edge, self.cfg.align, self.screen, self.scale),
+            edge: self.cfg.edge,
+            scale: self.scale,
+            colors: tab_colors(&self.palette),
+        });
         if want != self.tab {
             self.tab = want;
             if let Some(p) = &self.platform {
@@ -498,6 +504,16 @@ impl ShelfApp {
             }
             None => {}
         }
+    }
+}
+
+/// The tab is a piece of the shelf: its background and border, the arrow in the accent.
+fn tab_colors(p: &Palette) -> TabColors {
+    let rgb = |c: egui::Color32| [c.r(), c.g(), c.b()];
+    TabColors {
+        bg: rgb(p.bg),
+        border: rgb(p.border),
+        accent: rgb(p.accent),
     }
 }
 
