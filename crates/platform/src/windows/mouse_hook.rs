@@ -30,8 +30,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PostMessageW, PostThreadMessageW, RegisterClassW, SetLayeredWindowAttributes, SetWindowPos,
     SetWindowsHookExW, ShowWindow, UnhookWindowsHookEx, HWND_TOPMOST, LWA_ALPHA, MSG,
     MSLLHOOKSTRUCT, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WH_MOUSE_LL, WM_APP, WM_LBUTTONDOWN,
-    WM_LBUTTONUP, WM_MOUSEMOVE, WM_QUIT, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    WM_LBUTTONUP, WM_MOUSEMOVE, WM_QUIT, WM_RBUTTONDOWN, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use crate::{HookEvent, MouseSample};
@@ -42,12 +42,44 @@ const WM_HIDE_SENSOR: u32 = WM_APP + 2;
 
 thread_local! {
     static TX: RefCell<Option<Sender<HookEvent>>> = const { RefCell::new(None) };
-    static LEFT_DOWN: Cell<bool> = const { Cell::new(false) };
+    static HELD: Cell<Held> = const { Cell::new(Held { left: false, right: false }) };
     static SENSOR: Cell<isize> = const { Cell::new(0) };
     /// Monitor the strip currently sits on; 0 while hidden.
     static SENSOR_MON: Cell<isize> = const { Cell::new(0) };
     static EDGE: Cell<Edge> = const { Cell::new(Edge::Right) };
     static ZONE: Cell<i32> = const { Cell::new(4) };
+}
+
+/// Mouse buttons held, as the hook has seen them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Held {
+    left: bool,
+    right: bool,
+}
+
+impl Held {
+    fn after(self, msg: u32) -> Held {
+        match msg {
+            WM_LBUTTONDOWN => Held { left: true, ..self },
+            WM_LBUTTONUP => Held {
+                left: false,
+                ..self
+            },
+            WM_RBUTTONDOWN => Held {
+                right: true,
+                ..self
+            },
+            WM_RBUTTONUP => Held {
+                right: false,
+                ..self
+            },
+            _ => self,
+        }
+    }
+
+    fn any(self) -> bool {
+        self.left || self.right
+    }
 }
 
 fn send(e: HookEvent) {
@@ -159,10 +191,10 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
     if code >= 0 {
         let info = unsafe { &*(lparam.0 as *const MSLLHOOKSTRUCT) };
         let sensor = HWND(SENSOR.get() as *mut _);
-        match wparam.0 as u32 {
-            WM_LBUTTONDOWN => LEFT_DOWN.set(true),
+        let msg = wparam.0 as u32;
+        HELD.set(HELD.get().after(msg));
+        match msg {
             WM_LBUTTONUP => {
-                LEFT_DOWN.set(false);
                 if SENSOR_MON.replace(0) != 0 {
                     let _ =
                         unsafe { PostMessageW(Some(sensor), WM_HIDE_SENSOR, WPARAM(0), LPARAM(0)) };
@@ -170,7 +202,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
             }
             // Only once the button is held and moving: the press itself has already been
             // hit-tested, so the strip never steals a click (e.g. on an edge scrollbar).
-            WM_MOUSEMOVE if LEFT_DOWN.get() => {
+            WM_MOUSEMOVE if HELD.get().left => {
                 let mon = unsafe { MonitorFromPoint(info.pt, MONITOR_DEFAULTTONEAREST) };
                 if SENSOR_MON.replace(mon.0 as isize) != mon.0 as isize {
                     let _ = unsafe {
@@ -187,7 +219,7 @@ unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -
         }
         send(HookEvent::Mouse(MouseSample {
             pos: (info.pt.x, info.pt.y),
-            left_down: LEFT_DOWN.get(),
+            button_down: HELD.get().any(),
         }));
     }
     unsafe { CallNextHookEx(None, code, wparam, lparam) }
@@ -336,6 +368,18 @@ mod tests {
         right: 1920,
         bottom: 1080,
     };
+
+    #[test]
+    fn either_button_counts_as_held_until_both_are_up() {
+        let mut held = Held::default();
+        held = held.after(WM_RBUTTONDOWN);
+        assert!(held.any(), "right button alone");
+        held = held.after(WM_LBUTTONDOWN).after(WM_LBUTTONUP);
+        assert!(held.any(), "right still down after left went up");
+        held = held.after(WM_RBUTTONUP);
+        assert!(!held.any());
+        assert_eq!(held.after(WM_MOUSEMOVE), held);
+    }
 
     #[test]
     fn the_probe_is_one_pixel_just_past_the_right_edge() {

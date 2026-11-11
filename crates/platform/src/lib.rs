@@ -7,8 +7,8 @@ pub use shelve_core::HotkeyError;
 
 #[cfg(windows)]
 pub use crate::windows::{
-    acquire_single_instance, animations_enabled, file_icon, hide_shelf_window, is_autostart,
-    monitor_at_cursor, prepare_shelf_window, set_autostart, show_shelf_window, start,
+    acquire_single_instance, animations_enabled, cursor_state, file_icon, hide_shelf_window,
+    is_autostart, monitor_at_cursor, prepare_shelf_window, set_autostart, show_shelf_window, start,
     start_drag_out, start_mouse_hook, system_look, trim_memory, try_hotkey, MouseHook,
     PlatformHandle, SingleInstance, SystemLook,
 };
@@ -42,11 +42,12 @@ pub enum DragOutcome {
     Cancelled,
 }
 
-/// One mouse event from the low-level hook, in physical screen pixels.
+/// Where the mouse is, in physical screen pixels: from the hook or read directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MouseSample {
     pub pos: (i32, i32),
-    pub left_down: bool,
+    /// The left or the right button is held.
+    pub button_down: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

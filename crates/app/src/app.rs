@@ -77,7 +77,9 @@ pub fn start_auto_show(
     }
     let (hook_tx, hook_rx) = mpsc::channel();
     let auto_cfg = cfg.clone();
-    std::thread::spawn(move || crate::auto_show::run(hook_rx, auto_cfg, tx, shared));
+    std::thread::spawn(move || {
+        crate::auto_show::run(hook_rx, auto_cfg, tx, shared, shelve_platform::cursor_state)
+    });
     // Without the hook only the hotkey and tray show the shelf.
     shelve_platform::start_mouse_hook(cfg.edge, cfg.edge_zone_px, hook_tx)
         .inspect_err(|e| println!("mouse hook failed: {e}"))
