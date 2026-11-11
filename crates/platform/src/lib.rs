@@ -3,6 +3,7 @@ mod windows;
 
 mod icon;
 pub use icon::{icon_rgba, IconStyle};
+pub use shelve_core::HotkeyError;
 
 #[cfg(windows)]
 pub use crate::windows::{
@@ -30,7 +31,8 @@ pub enum PlatformEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HotkeyStatus {
     Registered,
-    Failed(String),
+    /// Kept as a kind, not a library message, so it is shown in the interface language.
+    Failed(HotkeyError),
 }
 
 /// How a drag-out ended. The shelf only offers copy, so there is no "moved".
@@ -52,12 +54,4 @@ pub enum HookEvent {
     Mouse(MouseSample),
     /// A drag carrying files (not text or links) reached the screen edge.
     FileDragAtEdge,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HotkeyError {
-    /// global-hotkey has no code for this key.
-    Unsupported,
-    /// Another program holds it (Windows does not say which).
-    Taken,
 }

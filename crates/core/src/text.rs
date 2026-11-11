@@ -11,6 +11,14 @@ pub enum Lang {
     Ru,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyError {
+    /// global-hotkey has no code for this key.
+    Unsupported,
+    /// Another program holds it (Windows does not say which).
+    Taken,
+}
+
 pub struct Text {
     pub empty_hint: &'static str,
     pub drop_hint: &'static str,
@@ -128,19 +136,29 @@ impl Lang {
         }
     }
 
-    /// "3 files": the shelf header counter.
+    /// "3 items": the shelf header counter. Items, not files: folders count too.
     pub fn count(self, n: usize) -> String {
         let word = match self {
-            Lang::En if n == 1 => "file",
-            Lang::En => "files",
+            Lang::En if n == 1 => "item",
+            Lang::En => "items",
             Lang::Ru => match (n % 10, n % 100) {
-                (_, 11..=14) => "файлов",
-                (1, _) => "файл",
-                (2..=4, _) => "файла",
-                _ => "файлов",
+                (_, 11..=14) => "объектов",
+                (1, _) => "объект",
+                (2..=4, _) => "объекта",
+                _ => "объектов",
             },
         };
         format!("{n} {word}")
+    }
+
+    /// Why the hotkey from the settings did not register at startup.
+    pub fn hotkey_status_error(self, combo: &str, why: HotkeyError) -> String {
+        match (self, why) {
+            (Lang::En, HotkeyError::Taken) => format!("{combo} is taken by another program"),
+            (Lang::En, HotkeyError::Unsupported) => format!("{combo} cannot be used"),
+            (Lang::Ru, HotkeyError::Taken) => format!("{combo} занято другой программой"),
+            (Lang::Ru, HotkeyError::Unsupported) => format!("{combo} нельзя использовать"),
+        }
     }
 
     pub fn hotkey_failed(self, why: &str) -> String {
@@ -200,12 +218,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn english_counts_one_file_and_many_files() {
+    fn english_counts_one_item_and_many_items() {
         for (n, s) in [
-            (1, "1 file"),
-            (2, "2 files"),
-            (11, "11 files"),
-            (21, "21 files"),
+            (1, "1 item"),
+            (2, "2 items"),
+            (11, "11 items"),
+            (21, "21 items"),
         ] {
             assert_eq!(Lang::En.count(n), s);
         }
@@ -214,18 +232,31 @@ mod tests {
     #[test]
     fn russian_count_uses_plural_forms() {
         for (n, s) in [
-            (1, "1 файл"),
-            (2, "2 файла"),
-            (4, "4 файла"),
-            (5, "5 файлов"),
-            (11, "11 файлов"),
-            (14, "14 файлов"),
-            (21, "21 файл"),
-            (22, "22 файла"),
-            (100, "100 файлов"),
-            (111, "111 файлов"),
+            (1, "1 объект"),
+            (2, "2 объекта"),
+            (4, "4 объекта"),
+            (5, "5 объектов"),
+            (11, "11 объектов"),
+            (14, "14 объектов"),
+            (21, "21 объект"),
+            (22, "22 объекта"),
+            (100, "100 объектов"),
+            (111, "111 объектов"),
         ] {
             assert_eq!(Lang::Ru.count(n), s);
+        }
+    }
+
+    #[test]
+    fn hotkey_status_error_names_the_combo_in_the_chosen_language() {
+        use HotkeyError::*;
+        for (lang, why, s) in [
+            (Lang::En, Taken, "Ctrl+Alt+D is taken by another program"),
+            (Lang::En, Unsupported, "Ctrl+Alt+D cannot be used"),
+            (Lang::Ru, Taken, "Ctrl+Alt+D занято другой программой"),
+            (Lang::Ru, Unsupported, "Ctrl+Alt+D нельзя использовать"),
+        ] {
+            assert_eq!(lang.hotkey_status_error("Ctrl+Alt+D", why), s);
         }
     }
 }

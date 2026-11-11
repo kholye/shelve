@@ -242,7 +242,8 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         ui.colored_label(error, e.as_str());
     } else if let (false, Some(HotkeyStatus::Failed(e))) = (*capturing, &*hotkey_status) {
         // None right after a change: the new status comes on the shelf's next pass.
-        ui.colored_label(error, lang.hotkey_failed(e));
+        let why = lang.hotkey_status_error(&cfg.hotkey, *e);
+        ui.colored_label(error, lang.hotkey_failed(&why));
     }
     if let Some(combo) = confirm.clone() {
         let warn = ui.visuals().warn_fg_color;
