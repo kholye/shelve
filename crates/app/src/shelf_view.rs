@@ -262,8 +262,9 @@ fn row(
     let id = ui.scope_id().with(&item.path);
     // The whole row is the handle: click (to dismiss a missing file) and drag out.
     let resp = look.interactive.then(|| {
-        ui.interact(body, id, Sense::click_and_drag())
-            .on_hover_text(item.path.display().to_string())
+        let resp = ui.interact(body, id, Sense::click_and_drag());
+        path_tooltip(&resp, &item.path.display().to_string());
+        resp
     });
     // Not `resp.hovered()`: that is false while the pointer is on the remove button.
     let under_pointer = look.interactive && ui.rect_contains_pointer(body);
@@ -363,6 +364,58 @@ fn row(
     } else {
         None // the middle button does not drag files out
     }
+}
+
+/// Half the diagonal of the pointer on the full-path tooltip.
+const POINTER: f32 = 6.0;
+
+/// The full path under the row (over it when there is no room below), across the panel,
+/// with a pointer at the icon. The usual hover delay and hiding still apply.
+fn path_tooltip(resp: &egui::Response, path: &str) {
+    let anchor = resp.rect.shrink2(vec2(4.0, 0.0)); // 8 points in from the panel sides
+    let frame = egui::Frame::popup(&resp.ctx.global_style())
+        .inner_margin(egui::Margin::symmetric(10, 6))
+        .corner_radius(6.0);
+    let text_w = anchor.width() - frame.total_margin().sum().x;
+    let mut tip = egui::Tooltip::for_enabled(resp);
+    tip.popup = tip
+        .popup
+        .anchor(anchor)
+        .frame(frame)
+        .gap(POINTER)
+        .width(text_w)
+        .align(egui::RectAlign::BOTTOM_START)
+        .align_alternatives(&[egui::RectAlign::TOP_START]);
+    let Some(shown) = tip.show(|ui| {
+        ui.set_width(text_w);
+        ui.label(path);
+    }) else {
+        return;
+    };
+    // Drawn over the box so it hides the border under it: arrow and box are one shape.
+    let r = shown.response.rect;
+    let below = r.top() >= anchor.bottom();
+    // The frame draws its border inside its rect: meet the middle of that line.
+    let half = frame.stroke.width / 2.0;
+    let (edge, dir) = if below {
+        (r.top() + half, -1.0)
+    } else {
+        (r.bottom() - half, 1.0)
+    };
+    let x = r.left() + 30.0;
+    let side = |dx: f32| pos2(x + dx, edge);
+    let tip_pt = pos2(x, edge + dir * POINTER);
+    let back = pos2(x, edge - dir * POINTER);
+    let painter = resp.ctx.layer_painter(shown.response.layer_id);
+    painter.add(Shape::convex_polygon(
+        vec![side(-POINTER), tip_pt, side(POINTER), back],
+        frame.fill,
+        Stroke::NONE,
+    ));
+    painter.add(Shape::line(
+        vec![side(-POINTER), tip_pt, side(POINTER)],
+        frame.stroke,
+    ));
 }
 
 /// One line of text, cut with an ellipsis at `width`.
@@ -951,6 +1004,57 @@ mod tests {
         for tip in tips {
             assert!(PANEL.contains_rect(tip), "tooltip {tip:?} leaves {PANEL:?}");
         }
+    }
+
+    /// Shows the full-path tooltip of row `i` on a shelf of `n` long paths; returns its box.
+    fn path_tooltip(i: usize, n: usize) -> Rect {
+        let items: Vec<ShelfItem> = (0..n)
+            .map(|k| ShelfItem {
+                path: PathBuf::from(format!(
+                    r"C:\Users\admin\Documents\Проекты\2026\Клиенты\папка {k}\отчёт за квартал {k}.txt"
+                )),
+                kind: ItemKind::File,
+            })
+            .collect();
+        let ctx = egui::Context::default();
+        crate::theme::fit_tooltips(&ctx);
+        ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+        let at = row_rect(i).left_center() + vec2(60.0, 0.0);
+        pass(&ctx, &items, false, vec![]);
+        for _ in 0..3 {
+            pass(&ctx, &items, false, vec![egui::Event::PointerMoved(at)]);
+        }
+        let tips: Vec<Rect> = ctx.memory(|m| {
+            m.layer_ids()
+                .filter(|l| l.order == egui::Order::Tooltip)
+                .filter_map(|l| m.area_rect(l.id))
+                .collect()
+        });
+        assert_eq!(tips.len(), 1, "{tips:?}");
+        tips[0]
+    }
+
+    #[test]
+    fn the_full_path_tooltip_hangs_under_its_row_across_the_panel() {
+        let tip = path_tooltip(0, 3);
+        let row = row_rect(0);
+        assert!(
+            tip.top() >= row.bottom() && tip.top() <= row.bottom() + 8.0,
+            "tooltip {tip:?} is not right under row {row:?}"
+        );
+        assert_eq!(tip.left(), PANEL.left() + 8.0, "{tip:?}");
+        assert_eq!(tip.right(), PANEL.right() - 8.0, "{tip:?}");
+    }
+
+    #[test]
+    fn the_full_path_tooltip_of_a_bottom_row_stands_over_it() {
+        let tip = path_tooltip(7, 8);
+        let row = row_rect(7);
+        assert!(
+            tip.bottom() <= row.top() && tip.bottom() >= row.top() - 8.0,
+            "tooltip {tip:?} is not right over row {row:?}"
+        );
+        assert_eq!(tip.left(), PANEL.left() + 8.0, "{tip:?}");
     }
 
     #[test]
