@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use shelve_core::{
-    default_config_path, Command, Config, Edge, ItemKind, ScreenRect, Shelf, ShelfItem,
+    default_config_path, Command, Config, Edge, ItemKind, ScreenRect, Selection, Shelf, ShelfItem,
 };
 
 use crate::auto_show::AutoShowInput;
@@ -54,6 +54,8 @@ pub struct ShelfApp {
     pub icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
     /// Which files are gone, as last answered by the presence thread. Drawing only reads it.
     pub presence: Presence,
+    /// Rows picked with the mouse; a drag on one of them takes them all.
+    pub selection: Selection,
     /// Asks the presence thread; its answers come back on `presence_answers`.
     pub presence_queue: presence::Queue,
     pub presence_answers: Receiver<presence::Answer>,
@@ -378,6 +380,8 @@ impl eframe::App for ShelfApp {
             }
         }
         self.rows.sync(self.shelf.items(), now, self.animate);
+        // Rows removed, cleared or moved away by Explorer are no longer selected.
+        self.selection.retain(self.shelf.items());
         let target = self.target_h();
         if target != self.height.to() {
             // Items came or went: glide to the new height from wherever the panel is.
@@ -468,17 +472,19 @@ impl ShelfApp {
                         let look = (&palette, file_over, self.cfg.lang);
                         // Lent too: `icon` borrows `self` mutably.
                         let presence = std::mem::take(&mut self.presence);
+                        let selection = std::mem::take(&mut self.selection);
                         let scroll_to = self.scroll_to.clone();
                         let action = shelf_view(
                             ui,
                             &rows,
                             now,
                             look,
-                            &presence,
+                            (&presence, &selection),
                             scroll_to.as_deref(),
                             &mut |item| self.icon(&ctx, item),
                         );
                         self.presence = presence;
+                        self.selection = selection;
                         action
                     })
                     .inner
@@ -507,7 +513,14 @@ impl ShelfApp {
             }
             Some(Action::Clear) => self.shelf.clear(),
             Some(Action::OpenSettings) => self.settings.open(&self.cfg, self.hotkey_status()),
-            Some(Action::DragOut(item, button)) => self.drag_out(ui, &[item], button),
+            Some(Action::DragOut(item, button)) => {
+                let items = self.selection.to_drag(self.shelf.items(), &item);
+                self.drag_out(ui, &items, button);
+            }
+            Some(Action::Select { path, ctrl, shift }) => {
+                self.selection.click(self.shelf.items(), &path, ctrl, shift)
+            }
+            Some(Action::Deselect) => self.selection.clear(),
             Some(Action::DragOutAll(button)) => {
                 let items = self.shelf.items().to_vec();
                 self.drag_out(ui, &items, button);

@@ -127,6 +127,7 @@ fn main() -> eframe::Result {
                 auto_show,
                 icons: HashMap::new(),
                 presence: HashMap::new(),
+                selection: Default::default(),
                 presence_queue,
                 presence_answers,
                 look,

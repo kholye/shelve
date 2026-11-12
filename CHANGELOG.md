@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Several rows come off in one drag: pick them as in Explorer (click, Ctrl+click, Shift+click) and drag any of them. Picked rows are tinted with the accent colour; a click on the empty space under the rows drops the choice. A row that is not picked still goes alone.
 - A file dropped on a long shelf no longer lands out of sight: the list scrolls down to its new row.
 - A file name too long for its row is shortened in the middle, not at the end, so the extension stays in sight: "Lease agreement (s…ned).pdf" instead of "Lease agreement (sig…". The header line is cut as before.
 - The full path that shows when the mouse rests on a row no longer runs off the screen: a long path wraps onto more lines within the shelf's width, whichever edge the shelf is on.

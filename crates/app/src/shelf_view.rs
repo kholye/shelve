@@ -7,7 +7,7 @@ use eframe::egui::{
     self, pos2, vec2, Color32, FontId, PointerButton, Pos2, Rect, Sense, Shape, Stroke,
 };
 use eframe::epaint::text::{LayoutJob, TextFormat, TextWrapping};
-use shelve_core::{ItemKind, Lang, ShelfItem, Text};
+use shelve_core::{ItemKind, Lang, Selection, ShelfItem, Text};
 use shelve_platform::DragButton;
 
 use crate::labels::{cut_middle, folder_label};
@@ -32,18 +32,26 @@ pub enum Action {
     DragOut(ShelfItem, DragButton),
     /// The user started dragging the header counter: everything on the shelf goes out.
     DragOutAll(DragButton),
+    /// A click on a present row, with Ctrl or Shift held or not.
+    Select {
+        path: std::path::PathBuf,
+        ctrl: bool,
+        shift: bool,
+    },
+    /// A click on the empty part of the list.
+    Deselect,
 }
 
 /// Draws the shelf into `ui` (the inside of the panel). `rows` are the items of the
 /// shelf with their animation state at `now`. `file_over`: a file is being carried over
 /// the shelf. `presence` says which files are gone; the view never asks the disk itself.
-/// `icon` returns the shell icon of an item, if there is one.
+/// `selected` rows are highlighted. `icon` returns the shell icon of an item, if there is one.
 pub fn shelf_view(
     ui: &mut egui::Ui,
     rows: &Rows,
     now: Instant,
     (p, file_over, lang): (&Palette, bool, Lang),
-    presence: &Presence,
+    (presence, selected): (&Presence, &Selection),
     scroll_to: Option<&std::path::Path>,
     icon: &mut dyn FnMut(&ShelfItem) -> Option<egui::TextureHandle>,
 ) -> Option<Action> {
@@ -87,6 +95,7 @@ pub fn shelf_view(
                         flash: rows.flash(r, now),
                         interactive: !rows.is_leaving(r),
                         missing: is_missing(presence, &r.item.path),
+                        selected: selected.contains(&r.item.path),
                     };
                     let size = vec2(ui.available_width(), ROW_H * look.height);
                     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
@@ -108,6 +117,14 @@ pub fn shelf_view(
                         ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
                     drop_placeholder(ui, rect, p, t);
                     ui.scroll_to_rect(rect, None);
+                }
+                // The list below the last row: a click there drops the selection.
+                let rest = list.height() - content - ghost;
+                if rest > 0.0 {
+                    let size = vec2(ui.available_width(), rest);
+                    if ui.allocate_exact_size(size, Sense::click()).1.clicked() {
+                        action = Some(Action::Deselect);
+                    }
                 }
             });
     }
@@ -242,6 +259,8 @@ struct RowLook {
     interactive: bool,
     /// The file is gone: greyed and struck through, a click removes the row.
     missing: bool,
+    /// Picked with a click: washed with the accent.
+    selected: bool,
 }
 
 fn row(
@@ -268,11 +287,14 @@ fn row(
     });
     // Not `resp.hovered()`: that is false while the pointer is on the remove button.
     let under_pointer = look.interactive && ui.rect_contains_pointer(body);
-    if look.flash > 0.0 {
+    if look.selected {
+        painter.rect_filled(body, ROW_RADIUS, fade(p.accent_bg));
+    } else if look.flash > 0.0 {
         let wash = p.accent_bg.gamma_multiply(look.flash * look.height);
         painter.rect_filled(body, ROW_RADIUS, wash);
     }
-    if under_pointer {
+    if under_pointer && !look.selected {
+        // Opaque: it would hide the selection wash.
         painter.rect_filled(body, ROW_RADIUS, p.hover);
     }
 
@@ -357,6 +379,13 @@ fn row(
         Some(Action::Remove(item.path.clone()))
     } else if missing {
         None
+    } else if resp.clicked() {
+        let m = ui.input(|i| i.modifiers);
+        Some(Action::Select {
+            path: item.path.clone(),
+            ctrl: m.command,
+            shift: m.shift,
+        })
     } else if resp.drag_started_by(PointerButton::Primary) {
         Some(Action::DragOut(item.clone(), DragButton::Left))
     } else if resp.drag_started_by(PointerButton::Secondary) {
@@ -652,7 +681,8 @@ mod tests {
         rows.sync(items, now, false);
         let mut out = ctx.run_ui(input, |ui| {
             let look = (&p, file_over, lang);
-            action = shelf_view(ui, &rows, now, look, presence, scroll_to, &mut |_| None);
+            let known = (presence, &Selection::default());
+            action = shelf_view(ui, &rows, now, look, known, scroll_to, &mut |_| None);
         });
         out.textures_delta.clear();
         action
@@ -694,7 +724,7 @@ mod tests {
         );
         pass_with(&ctx, &items, &none, false, vec![button(at, true)]);
         let released = pass_with(&ctx, &items, &none, false, vec![button(at, false)]);
-        assert_eq!(released, None, "a present row ignores a click");
+        assert_eq!(released, Some(select(&items[0], false, false)));
     }
 
     #[test]
@@ -772,10 +802,43 @@ mod tests {
         );
     }
 
+    fn select(item: &ShelfItem, ctrl: bool, shift: bool) -> Action {
+        Action::Select {
+            path: item.path.clone(),
+            ctrl,
+            shift,
+        }
+    }
+
+    /// `click` with these keys held.
+    fn click_holding(items: &[ShelfItem], at: Pos2, mods: egui::Modifiers) -> Option<Action> {
+        let ctx = egui::Context::default();
+        let run = |events| pass(&ctx, items, false, events);
+        run(vec![egui::Event::ModifiersChanged(mods)]);
+        run(vec![egui::Event::PointerMoved(at)]);
+        run(vec![button(at, true)]);
+        run(vec![button(at, false)])
+    }
+
     #[test]
-    fn click_on_an_existing_row_does_nothing() {
-        let at = row_rect(0).left_center() + vec2(60.0, 0.0);
-        assert_eq!(click(&existing(2), at), None);
+    fn click_on_an_existing_row_selects_it_with_the_keys_held() {
+        let items = existing(2);
+        let at = row_rect(1).left_center() + vec2(60.0, 0.0);
+        assert_eq!(click(&items, at), Some(select(&items[1], false, false)));
+        assert_eq!(
+            click_holding(&items, at, egui::Modifiers::COMMAND),
+            Some(select(&items[1], true, false))
+        );
+        assert_eq!(
+            click_holding(&items, at, egui::Modifiers::SHIFT),
+            Some(select(&items[1], false, true))
+        );
+    }
+
+    #[test]
+    fn click_on_the_empty_part_of_the_list_deselects() {
+        let at = row_rect(5).center();
+        assert_eq!(click(&existing(2), at), Some(Action::Deselect));
     }
 
     #[test]
