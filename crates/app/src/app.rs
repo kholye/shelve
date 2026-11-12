@@ -20,6 +20,7 @@ use crate::layout::{self, SharedRect};
 use crate::rows::{ease_out, Glide, Rows, ANIM_S};
 use crate::settings::{Changes, Settings};
 use crate::theme::{self, Palette};
+use crate::update::UpdateCheck;
 use crate::window::{shelf_rect, tab_rect};
 
 /// Slide-in duration, seconds.
@@ -47,6 +48,7 @@ pub struct ShelfApp {
     /// The thread that alone decides whether the shelf is shown (`auto_show`).
     pub auto_show: Sender<AutoShowInput>,
     pub settings: Settings,
+    pub updates: UpdateCheck,
     /// None: the shell had no icon, the drawn glyph is used.
     /// Note: never pruned; a few KB per path ever dropped in one session.
     pub icons: HashMap<PathBuf, Option<egui::TextureHandle>>,
@@ -235,6 +237,9 @@ impl ShelfApp {
             // The new thread's tab starts hidden; place it again.
             self.tab = None;
         }
+        if changes.updates {
+            self.updates.set_enabled(self.cfg.check_updates);
+        }
         if changes.autostart {
             autostart_error = shelve_platform::set_autostart(self.cfg.autostart)
                 .err()
@@ -329,7 +334,8 @@ impl eframe::App for ShelfApp {
             self.apply(changes);
         }
         if self.settings.is_open() {
-            self.settings.show(ui.ctx(), self.palette);
+            self.settings
+                .show(ui.ctx(), self.palette, self.updates.found());
         }
         if !self.visible {
             // eframe shows the window after its first frame; its WM_PAINT brings us here to hide it.

@@ -30,6 +30,8 @@ pub struct Config {
     pub edge_zone_px: u32,
     pub hide_delay_ms: u32,
     pub lang: Lang,
+    /// Ask GitHub once a day whether a newer version is out.
+    pub check_updates: bool,
 }
 
 impl Default for Config {
@@ -43,6 +45,7 @@ impl Default for Config {
             edge_zone_px: 4,
             hide_delay_ms: 1500,
             lang: Lang::En,
+            check_updates: true,
         }
     }
 }
@@ -89,6 +92,14 @@ mod tests {
         assert_eq!(c.edge, Edge::Right);
         assert_eq!(c.align, Align::Center);
         assert_eq!(c.hotkey, "Ctrl+Alt+D");
+        assert!(c.check_updates);
+    }
+
+    #[test]
+    fn config_from_before_the_update_check_turns_it_on() {
+        let c = load_with_content("old", r#"{"edge":"left","auto_show":false}"#);
+        assert_eq!(c.edge, Edge::Left);
+        assert!(c.check_updates);
     }
 
     #[test]

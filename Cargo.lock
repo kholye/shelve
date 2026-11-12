@@ -2327,6 +2327,7 @@ dependencies = [
 name = "shelve-app"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "eframe",
  "global-hotkey",
  "raw-window-handle",

@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use eframe::egui;
-use shelve_core::Config;
+use shelve_core::{Config, Lang, Release};
 use shelve_platform::{HotkeyError, HotkeyStatus};
 
-use crate::theme::Palette;
+use crate::theme::{contrast, Palette};
 use crate::widgets::{card, lang_picker, place_label, place_picker, toggle, window_fill};
 
 /// What the caller has to re-apply after the settings changed.
@@ -18,6 +18,8 @@ pub struct Changes {
     /// The language: the tray menu is rebuilt in it.
     pub lang: bool,
     pub autostart: bool,
+    /// The update check was switched on or off.
+    pub updates: bool,
 }
 
 struct State {
@@ -37,6 +39,8 @@ struct State {
     want_focus: bool,
     /// Colours of the current Windows theme; refreshed on every `show`.
     palette: Palette,
+    /// A newer release the update check found; refreshed on every `show`.
+    update: Option<Release>,
 }
 
 /// The settings window is a deferred viewport (its own OS window, so the hotkey field can
@@ -59,6 +63,7 @@ impl Settings {
             pending: Changes::default(),
             want_focus: false,
             palette: crate::theme::palette(false, [0x0F, 0x6C, 0xBD]),
+            update: None,
         })))
     }
 
@@ -90,17 +95,18 @@ impl Settings {
         ctx.input(|i| i.raw.viewports.contains_key(&id()))
     }
 
-    /// Stores the colours the window is drawn with; true if they changed.
-    fn set_palette(&self, palette: Palette) -> bool {
+    /// Stores what the window shows from outside; true if it changed.
+    fn set_inputs(&self, palette: Palette, update: Option<Release>) -> bool {
         let mut s = self.lock();
-        let changed = s.palette != palette;
+        let changed = s.palette != palette || s.update != update;
         s.palette = palette;
+        s.update = update;
         changed
     }
 
     /// Call on every pass of the shelf while open; the window closes once this stops.
-    pub fn show(&self, ctx: &egui::Context, palette: Palette) {
-        if self.set_palette(palette) {
+    pub fn show(&self, ctx: &egui::Context, palette: Palette, update: Option<Release>) {
+        if self.set_inputs(palette, update) {
             // The window only repaints on its own input: without this it stayed in the
             // old theme until the mouse moved over it.
             ctx.request_repaint_of(id());
@@ -110,10 +116,15 @@ impl Settings {
         if self.exists(ctx) && std::mem::take(&mut self.lock().want_focus) {
             ctx.send_viewport_cmd_to(id(), egui::ViewportCommand::Focus);
         }
-        let title = self.lock().cfg.lang.text().settings_title;
+        let (title, height) = {
+            let s = self.lock();
+            // Taller while the new version card is on top, so nothing needs scrolling.
+            let card = if shows_update(&s) { UPDATE_CARD_H } else { 0.0 };
+            (s.cfg.lang.text().settings_title, 610.0 + card)
+        };
         let builder = egui::ViewportBuilder::default()
             .with_title(title)
-            .with_inner_size([420.0, 540.0])
+            .with_inner_size([420.0, height])
             .with_resizable(false)
             .with_icon(crate::window::app_icon());
         let state = self.clone();
@@ -174,9 +185,86 @@ fn key_cap(ui: &mut egui::Ui, p: &Palette, name: &str) {
         .show(ui, |ui| ui.label(egui::RichText::new(name).size(12.0)));
 }
 
+/// Height the new version card adds to the window, spacing included.
+const UPDATE_CARD_H: f32 = 72.0;
+
+/// The card is hidden at once when the switch goes off, before the checker hears of it.
+fn shows_update(s: &State) -> bool {
+    s.cfg.check_updates && s.update.is_some()
+}
+
+/// "Shelve 0.3.0 is out", with a button that opens its release page.
+fn update_card(ui: &mut egui::Ui, p: &Palette, lang: Lang, release: &Release) {
+    egui::Frame::new()
+        .fill(p.accent_bg)
+        .stroke(egui::Stroke::new(1.0, p.accent))
+        .corner_radius(6.0)
+        .inner_margin(egui::Margin::symmetric(14, 12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.label(egui::RichText::new(lang.update_out(&release.version)).strong());
+                    let have = lang.update_have(env!("CARGO_PKG_VERSION"));
+                    ui.label(egui::RichText::new(have).size(12.0).weak());
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let button = download_button(ui, p, lang.text().download)
+                        .on_hover_text(release.url.as_str());
+                    if button.clicked() {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(&release.url));
+                    }
+                });
+            });
+        });
+}
+
+/// A filled accent button with a drawn "download" arrow before its text.
+fn download_button(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Response {
+    // White text where it reads on the accent; the dark theme's lighter accent takes black.
+    let ink = if contrast(p.accent, egui::Color32::WHITE) >= 4.5 {
+        egui::Color32::WHITE
+    } else {
+        egui::Color32::BLACK
+    };
+    let galley =
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), egui::FontId::proportional(13.0), ink);
+    let (icon, gap, pad) = (10.0, 6.0, egui::vec2(12.0, 6.0));
+    let size = egui::vec2(icon + gap + galley.size().x, galley.size().y.max(icon)) + pad * 2.0;
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    let fill = if response.is_pointer_button_down_on() {
+        p.accent.gamma_multiply(0.8)
+    } else if response.hovered() {
+        p.accent.gamma_multiply(0.9)
+    } else {
+        p.accent
+    };
+    let painter = ui.painter();
+    painter.rect_filled(rect, 4.0, fill);
+    let o = egui::pos2(rect.left() + pad.x, rect.center().y - icon / 2.0);
+    let at = |x: f32, y: f32| o + egui::vec2(x, y);
+    let stroke = egui::Stroke::new(1.4, ink);
+    // An arrow down onto a line.
+    painter.line_segment([at(5.0, 0.5), at(5.0, 7.0)], stroke);
+    painter.line(vec![at(2.0, 4.0), at(5.0, 7.0), at(8.0, 4.0)], stroke);
+    painter.line_segment([at(1.0, 9.5), at(9.0, 9.5)], stroke);
+    let text_pos = egui::pos2(o.x + icon + gap, rect.center().y - galley.size().y / 2.0);
+    painter.galley(text_pos, galley, ink);
+    response
+}
+
 fn contents(ui: &mut egui::Ui, s: &mut State) {
     if s.capturing {
         capture(ui, s);
+    }
+    if shows_update(s) {
+        if let Some(release) = &s.update {
+            ui.add_space(8.0);
+            update_card(ui, &s.palette, s.cfg.lang, release);
+        }
     }
     let State {
         open: _,
@@ -189,6 +277,7 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         pending: changes,
         want_focus: _,
         palette,
+        update: _,
     } = s;
     let p = &*palette;
     let lang = cfg.lang;
@@ -269,6 +358,11 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
     if let Some(e) = autostart_error {
         ui.colored_label(error, e.as_str());
     }
+    card(ui, p, |ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        changes.updates |= toggle(ui, &mut cfg.check_updates, t.check_updates).changed();
+        ui.label(egui::RichText::new(t.check_updates_hint).size(12.0).weak());
+    });
 
     group(ui, t.language);
     card(ui, p, |ui| {
@@ -292,7 +386,8 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
             project_link(ui, t.project_page);
         });
     });
-    changes.any |= changes.hook || changes.hotkey || changes.autostart || changes.lang;
+    changes.any |=
+        changes.hook || changes.hotkey || changes.autostart || changes.lang || changes.updates;
 }
 
 const PROJECT_URL: &str = "https://github.com/kholye/shelve";
@@ -460,9 +555,24 @@ mod tests {
         // only the decision is tested: `show` repaints the window when this says true.
         let settings = Settings::new(&Config::default());
         let palette = |dark| crate::theme::palette(dark, [0x0F, 0x6C, 0xBD]);
-        assert!(!settings.set_palette(palette(false)), "same palette");
-        assert!(settings.set_palette(palette(true)));
-        assert!(!settings.set_palette(palette(true)));
+        assert!(!settings.set_inputs(palette(false), None), "same palette");
+        assert!(settings.set_inputs(palette(true), None));
+        assert!(!settings.set_inputs(palette(true), None));
+    }
+
+    #[test]
+    fn a_found_release_repaints_the_open_settings_window() {
+        let settings = Settings::new(&Config::default());
+        let palette = crate::theme::palette(false, [0x0F, 0x6C, 0xBD]);
+        let release = Release {
+            version: "9.0.0".into(),
+            url: "https://github.com/kholye/shelve/releases/tag/v9.0.0".into(),
+        };
+        assert!(settings.set_inputs(palette, Some(release.clone())));
+        assert!(shows_update(&settings.lock()));
+        assert!(!settings.set_inputs(palette, Some(release)));
+        settings.lock().cfg.check_updates = false;
+        assert!(!shows_update(&settings.lock()), "switched off: no card");
     }
 
     #[test]

@@ -10,6 +10,7 @@ mod rows;
 mod settings;
 mod shelf_view;
 mod theme;
+mod update;
 mod widgets;
 mod window;
 
@@ -110,6 +111,7 @@ fn main() -> eframe::Result {
             Ok(Box::new(ShelfApp {
                 shelf: Shelf::new(),
                 settings: Settings::new(&cfg),
+                updates: update::UpdateCheck::start(cfg.check_updates, cc.egui_ctx.clone()),
                 cfg,
                 events,
                 platform_tx,

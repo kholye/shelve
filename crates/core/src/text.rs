@@ -50,6 +50,9 @@ pub struct Text {
     pub language: &'static str,
     pub version: &'static str,
     pub project_page: &'static str,
+    pub check_updates: &'static str,
+    pub check_updates_hint: &'static str,
+    pub download: &'static str,
 
     pub tray_toggle: &'static str,
     pub quit: &'static str,
@@ -85,6 +88,9 @@ const EN: Text = Text {
     language: "Language",
     version: "Shelve, version",
     project_page: "Project page",
+    check_updates: "Check for updates",
+    check_updates_hint: "Once a day, asks GitHub if a new version is out",
+    download: "Download",
 
     tray_toggle: "Show/hide",
     quit: "Exit",
@@ -120,6 +126,9 @@ const RU: Text = Text {
     language: "Язык",
     version: "Shelve, версия",
     project_page: "Страница проекта",
+    check_updates: "Проверять обновления",
+    check_updates_hint: "Раз в день спрашивает GitHub, нет ли новой версии",
+    download: "Скачать",
 
     tray_toggle: "Показать/скрыть",
     quit: "Выход",
@@ -165,6 +174,20 @@ impl Lang {
             (Lang::En, HotkeyError::Unsupported) => format!("{combo} cannot be used"),
             (Lang::Ru, HotkeyError::Taken) => format!("{combo} занято другой программой"),
             (Lang::Ru, HotkeyError::Unsupported) => format!("{combo} нельзя использовать"),
+        }
+    }
+
+    pub fn update_out(self, version: &str) -> String {
+        match self {
+            Lang::En => format!("Shelve {version} is out"),
+            Lang::Ru => format!("Вышла Shelve {version}"),
+        }
+    }
+
+    pub fn update_have(self, version: &str) -> String {
+        match self {
+            Lang::En => format!("You have {version}"),
+            Lang::Ru => format!("У вас {version}"),
         }
     }
 

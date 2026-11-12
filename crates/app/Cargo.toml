@@ -14,6 +14,7 @@ shelve-core = { path = "../core" }
 shelve-platform = { path = "../platform" }
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "links"] }
 raw-window-handle = "0.6"
+anyhow = "1"
 
 [dev-dependencies]
 # Checks that captured combos are strings global-hotkey can parse.

@@ -2,6 +2,7 @@ mod autostart;
 mod drag_out;
 mod file_icon;
 mod hotkey;
+mod http;
 mod mouse_hook;
 mod shelf_window;
 mod single_instance;
@@ -9,6 +10,7 @@ mod system_look;
 mod tab;
 mod tray;
 pub use hotkey::try_hotkey;
+pub use http::https_get;
 
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
