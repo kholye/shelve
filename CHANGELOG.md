@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - Several rows come off in one drag: pick them as in Explorer (click, Ctrl+click, Shift+click) and drag any of them. Picked rows are tinted with the accent colour; the choice is dropped by a second click on the only picked row, a click on the header outside its buttons or on the empty space under the rows, and when the shelf hides. A row that is not picked still goes alone.
 - A file dropped on a long shelf no longer lands out of sight: the list scrolls down to its new row.

@@ -2325,7 +2325,7 @@ dependencies = [
 
 [[package]]
 name = "shelve-app"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "shelve-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2346,7 +2346,7 @@ dependencies = [
 
 [[package]]
 name = "shelve-platform"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "global-hotkey",
