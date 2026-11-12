@@ -47,6 +47,21 @@ pub fn cut_middle(name: &str, fits: impl Fn(&str) -> bool) -> String {
     joined(lo)
 }
 
+/// The second line of a row: `missing` for a file that is gone, else the folder's
+/// path under the mouse (cut to `fits`) and its name otherwise.
+pub fn second_line(
+    path: &Path,
+    missing: Option<&str>,
+    hovered: bool,
+    fits: impl Fn(&str) -> bool,
+) -> String {
+    match missing {
+        Some(text) => text.to_owned(),
+        None if hovered => cut_path(&folder_path(path), fits),
+        None => folder_label(path),
+    }
+}
+
 /// The whole folder the file lies in, for the second line of the row under the mouse.
 pub fn folder_path(path: &Path) -> String {
     match path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -177,6 +192,27 @@ mod tests {
         );
         assert_eq!(folder_path(Path::new(r"D:\x.txt")), r"D:\");
         assert!(!folder_path(Path::new(r"D:\")).is_empty());
+    }
+
+    #[test]
+    fn the_row_under_the_mouse_shows_the_folder_path_others_the_folder_name() {
+        let path = Path::new(r"C:\Users\admin\sandbox\design\Пять\x.txt");
+        assert_eq!(second_line(path, None, false, up_to(99)), "Пять");
+        assert_eq!(
+            second_line(path, None, true, up_to(99)),
+            r"C:\Users\admin\sandbox\design\Пять"
+        );
+        assert_eq!(
+            second_line(path, None, true, up_to(22)),
+            r"C:\Users\…\design\Пять"
+        );
+    }
+
+    #[test]
+    fn a_missing_file_says_so_under_the_mouse_too() {
+        let path = Path::new(r"C:\a\x.txt");
+        assert_eq!(second_line(path, Some("gone"), true, up_to(99)), "gone");
+        assert_eq!(second_line(path, Some("gone"), false, up_to(99)), "gone");
     }
 
     #[test]

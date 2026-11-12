@@ -10,7 +10,7 @@ use eframe::epaint::text::{LayoutJob, TextFormat, TextWrapping};
 use shelve_core::{ItemKind, Lang, Selection, ShelfItem, Text};
 use shelve_platform::DragButton;
 
-use crate::labels::{cut_middle, cut_path, folder_label, folder_path};
+use crate::labels::{cut_middle, second_line};
 use crate::layout::{HEADER_H, PAD_BOTTOM, RADIUS, ROW_H};
 use crate::presence::{is_missing, Presence};
 use crate::rows::Rows;
@@ -347,13 +347,12 @@ fn row(
         color: weak,
         ..Default::default()
     };
-    let second = if missing {
-        t.missing.to_owned()
-    } else if under_pointer {
-        cut_path(&folder_path(&item.path), fits(ui, &second_format, width))
-    } else {
-        folder_label(&item.path)
-    };
+    let second = second_line(
+        &item.path,
+        missing.then_some(t.missing),
+        under_pointer,
+        fits(ui, &second_format, width),
+    );
     let name = name_line(ui, name, name_format, width);
     let second = one_line(ui, second, second_format, width);
     let top = body.center().y - (name.size().y + second.size().y) / 2.0;
