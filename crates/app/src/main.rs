@@ -56,6 +56,7 @@ fn main() -> eframe::Result {
             };
             let hwnd = h.hwnd.get();
             theme::install_font(&cc.egui_ctx);
+            theme::fit_tooltips(&cc.egui_ctx);
             let look = shelve_platform::system_look();
             let palette = theme::apply(&cc.egui_ctx, look);
             shelve_platform::prepare_shelf_window(hwnd);

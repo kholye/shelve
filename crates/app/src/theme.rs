@@ -129,6 +129,13 @@ pub fn set_animations(ctx: &egui::Context, on: bool) {
     ctx.all_styles_mut(|style| style.animation_time = time);
 }
 
+/// Tooltips wrap to the shelf's width: egui's default is wider than the shelf window,
+/// and a long path ran off the screen edge.
+pub fn fit_tooltips(ctx: &egui::Context) {
+    // Room for the tooltip's own frame and margins inside the panel width.
+    ctx.all_styles_mut(|s| s.spacing.tooltip_width = crate::layout::PANEL_W - 24.0);
+}
+
 /// Segoe UI in front of egui's own font. Without the file (not Windows, or a
 /// stripped-down install) egui keeps its built-in font.
 pub fn install_font(ctx: &egui::Context) {

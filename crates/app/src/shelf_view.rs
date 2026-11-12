@@ -841,6 +841,37 @@ mod tests {
     }
 
     #[test]
+    fn the_full_path_tooltip_stays_inside_the_window() {
+        // Bug: with the shelf at the right edge, a long path ran off the screen.
+        let long = ShelfItem {
+            path: PathBuf::from(format!(
+                r"C:\Users\admin\Documents\{}\Очень длинное имя файла, чтобы проверить подсказку.txt",
+                r"Проекты\2026\Клиенты\Без пробелов_очень_длинная_папка_с_подпапками".repeat(2)
+            )),
+            kind: ItemKind::File,
+        };
+        let items = [long];
+        let ctx = egui::Context::default();
+        crate::theme::fit_tooltips(&ctx);
+        ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+        let at = row_rect(0).left_center() + vec2(60.0, 0.0);
+        pass(&ctx, &items, false, vec![]);
+        for _ in 0..3 {
+            pass(&ctx, &items, false, vec![egui::Event::PointerMoved(at)]);
+        }
+        let tips: Vec<Rect> = ctx.memory(|m| {
+            m.layer_ids()
+                .filter(|l| l.order == egui::Order::Tooltip)
+                .filter_map(|l| m.area_rect(l.id))
+                .collect()
+        });
+        assert!(!tips.is_empty(), "no tooltip shown");
+        for tip in tips {
+            assert!(PANEL.contains_rect(tip), "tooltip {tip:?} leaves {PANEL:?}");
+        }
+    }
+
+    #[test]
     fn hundreds_of_rows_with_a_file_over_them_draw() {
         let many: Vec<ShelfItem> = (0..500)
             .map(|i| ShelfItem {
