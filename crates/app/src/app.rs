@@ -507,24 +507,36 @@ impl ShelfApp {
             }
             Some(Action::Clear) => self.shelf.clear(),
             Some(Action::OpenSettings) => self.settings.open(&self.cfg, self.hotkey_status()),
-            Some(Action::DragOut(item, button)) => {
-                let paths = drag_candidates(std::slice::from_ref(&item), &self.presence);
-                if !paths.is_empty() {
-                    let res = shelve_platform::start_drag_out(&paths, button);
-                    println!("drag_out {button:?} {res:?}");
-                    self.release_pointer = Some(match button {
-                        DragButton::Left => egui::PointerButton::Primary,
-                        DragButton::Right => egui::PointerButton::Secondary,
-                    });
-                    ui.ctx().request_repaint();
-                    match res {
-                        // Explorer may move it only later: watch until it goes or time is up.
-                        Ok(DragOutcome::Dropped) => self.presence_queue.watch(item.path),
-                        _ => self.presence_queue.check(item.path),
-                    }
-                }
+            Some(Action::DragOut(item, button)) => self.drag_out(ui, &[item], button),
+            Some(Action::DragOutAll(button)) => {
+                let items = self.shelf.items().to_vec();
+                self.drag_out(ui, &items, button);
             }
             None => {}
+        }
+    }
+
+    /// Drags the files of `items` out of the shelf in one go; gone ones stay behind.
+    fn drag_out(&mut self, ui: &egui::Ui, items: &[ShelfItem], button: DragButton) {
+        let paths = drag_candidates(items, &self.presence);
+        if paths.is_empty() {
+            return;
+        }
+        let res = shelve_platform::start_drag_out(&paths, button);
+        println!("drag_out {button:?} {} {res:?}", paths.len());
+        self.release_pointer = Some(match button {
+            DragButton::Left => egui::PointerButton::Primary,
+            DragButton::Right => egui::PointerButton::Secondary,
+        });
+        ui.ctx().request_repaint();
+        let dropped = matches!(res, Ok(DragOutcome::Dropped));
+        for path in paths {
+            if dropped {
+                // Explorer may move it only later: watch until it goes or time is up.
+                self.presence_queue.watch(path);
+            } else {
+                self.presence_queue.check(path);
+            }
         }
     }
 }

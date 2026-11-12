@@ -5,6 +5,7 @@
 - A file dropped on a long shelf no longer lands out of sight: the list scrolls down to its new row.
 - A file name too long for its row is shortened in the middle, not at the end, so the extension stays in sight: "Lease agreement (s…ned).pdf" instead of "Lease agreement (sig…". The header line is cut as before.
 - The full path that shows when the mouse rests on a row no longer runs off the screen: a long path wraps onto more lines within the shelf's width, whichever edge the shelf is on.
+- Everything on the shelf comes off in one drag: drag the "24 items" line in the header. It moves like a single row (Ctrl copies, the right button brings up the Windows menu); files that are gone stay behind.
 
 ## 0.3.0
 

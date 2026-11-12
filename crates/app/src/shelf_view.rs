@@ -30,6 +30,8 @@ pub enum Action {
     OpenSettings,
     /// The user started dragging this row out of the shelf with this button.
     DragOut(ShelfItem, DragButton),
+    /// The user started dragging the header counter: everything on the shelf goes out.
+    DragOutAll(DragButton),
 }
 
 /// Draws the shelf into `ui` (the inside of the panel). `rows` are the items of the
@@ -195,6 +197,23 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
         .galley(clear.center() - label.size() / 2.0, label, p.accent);
 
     let line = header_line(ui, rect, count, t, clear.left(), p.text_weak);
+    // The counter line is the handle that drags the whole shelf out. Click sense too, so
+    // the drag starts only once the mouse moves, not on a mere press.
+    let handle = Rect::from_min_max(
+        pos2(rect.left() + 4.0, gear.top()),
+        pos2(rect.left() + 12.0 + line.size().x + 8.0, gear.bottom()),
+    );
+    let all_resp = ui
+        .interact(
+            handle,
+            ui.scope_id().with("drag all"),
+            Sense::click_and_drag(),
+        )
+        .on_hover_text(t.drag_all)
+        .on_hover_cursor(egui::CursorIcon::Grab);
+    if all_resp.hovered() {
+        ui.painter().rect_filled(handle, 4.0, p.hover);
+    }
     let top = rect.center().y - line.size().y / 2.0;
     ui.painter()
         .galley(pos2(rect.left() + 12.0, top), line, p.text_weak);
@@ -203,8 +222,12 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
         Some(Action::OpenSettings)
     } else if clear_resp.clicked() {
         Some(Action::Clear)
+    } else if all_resp.drag_started_by(PointerButton::Primary) {
+        Some(Action::DragOutAll(DragButton::Left))
+    } else if all_resp.drag_started_by(PointerButton::Secondary) {
+        Some(Action::DragOutAll(DragButton::Right))
     } else {
-        None
+        None // the middle button does not drag files out
     }
 }
 
@@ -685,8 +708,12 @@ mod tests {
 
     /// Presses `which` on row 1 and moves away; returns what the move produced.
     fn drag_row_with(which: egui::PointerButton) -> Option<Action> {
+        drag_at(row_rect(1).left_center() + vec2(60.0, 0.0), which)
+    }
+
+    /// Presses `which` at `at` on a shelf of two and moves away; returns what the move produced.
+    fn drag_at(at: Pos2, which: egui::PointerButton) -> Option<Action> {
         let items = existing(2);
-        let at = row_rect(1).left_center() + vec2(60.0, 0.0);
         let ctx = egui::Context::default();
         pass(&ctx, &items, false, vec![]);
         pass(&ctx, &items, false, vec![egui::Event::PointerMoved(at)]);
@@ -718,6 +745,35 @@ mod tests {
             drag_row_with(egui::PointerButton::Secondary),
             Some(Action::DragOut(item, DragButton::Right))
         );
+    }
+
+    /// A point on the header counter ("2 items").
+    fn on_counter() -> Pos2 {
+        header_rect(PANEL).left_center() + vec2(24.0, 0.0)
+    }
+
+    #[test]
+    fn dragging_the_header_counter_takes_everything_out() {
+        assert_eq!(
+            drag_at(on_counter(), egui::PointerButton::Primary),
+            Some(Action::DragOutAll(DragButton::Left))
+        );
+        assert_eq!(
+            drag_at(on_counter(), egui::PointerButton::Secondary),
+            Some(Action::DragOutAll(DragButton::Right))
+        );
+        assert_eq!(drag_at(on_counter(), egui::PointerButton::Middle), None);
+    }
+
+    #[test]
+    fn a_click_on_the_header_counter_does_nothing() {
+        // Not even the press: with drag sense alone it started the drag right away.
+        let (items, at) = (existing(2), on_counter());
+        let ctx = egui::Context::default();
+        pass(&ctx, &items, false, vec![]);
+        pass(&ctx, &items, false, vec![egui::Event::PointerMoved(at)]);
+        assert_eq!(pass(&ctx, &items, false, vec![button(at, true)]), None);
+        assert_eq!(pass(&ctx, &items, false, vec![button(at, false)]), None);
     }
 
     #[test]

@@ -25,6 +25,8 @@ pub struct Text {
     pub clear: &'static str,
     /// After the counter in the shelf header: how to copy instead of move.
     pub ctrl_copy: &'static str,
+    /// Hover hint of the header counter, which drags everything out.
+    pub drag_all: &'static str,
     pub settings: &'static str,
     pub missing: &'static str,
     pub remove: &'static str,
@@ -63,6 +65,7 @@ const EN: Text = Text {
     drop_hint: "Drop to add",
     clear: "Clear",
     ctrl_copy: "Ctrl: copy",
+    drag_all: "Drag to take everything off the shelf",
     settings: "Settings",
     missing: "File not found. Click to remove",
     remove: "Remove from shelf",
@@ -101,6 +104,7 @@ const RU: Text = Text {
     drop_hint: "Отпустите, чтобы положить",
     clear: "Очистить",
     ctrl_copy: "Ctrl — копия",
+    drag_all: "Перетащите, чтобы забрать с полки всё",
     settings: "Настройки",
     missing: "Файл не найден. Щёлкните, чтобы убрать",
     remove: "Убрать с полки",
