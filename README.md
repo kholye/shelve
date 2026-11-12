@@ -44,7 +44,7 @@ Click the gear on the shelf, or "Settings" in the tray menu.
 
 - **Position.** Click one of the six spots on the picture of the screen: left or right edge; top, centre or bottom.
 - **Hotkey.** Click "Change" and press the new combination. Esc cancels. If another program already holds the combination, Shelve says so and keeps the old one.
-- **Behavior.** Whether the shelf comes out when a file is dragged to the edge, whether Shelve starts with Windows, and whether it checks for updates. Autostart is set for the current user only.
+- **Behavior.** Whether the shelf comes out when a file is dragged to the edge, whether Shelve starts with Windows, and whether it checks for updates. Autostart is set for the current user only. With the first switch off, the hotkey, the tray icon and the tab at the edge still open the shelf; a line under the switch says so.
 - **Language.** English or Russian.
 
 Changes apply at once.

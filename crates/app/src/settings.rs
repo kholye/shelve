@@ -120,7 +120,7 @@ impl Settings {
             let s = self.lock();
             // Taller while the new version card is on top, so nothing needs scrolling.
             let card = if shows_update(&s) { UPDATE_CARD_H } else { 0.0 };
-            (s.cfg.lang.text().settings_title, 610.0 + card)
+            (s.cfg.lang.text().settings_title, 645.0 + card)
         };
         let builder = egui::ViewportBuilder::default()
             .with_title(title)
@@ -350,7 +350,9 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
 
     group(ui, t.behavior);
     card(ui, p, |ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
         changes.hook |= toggle(ui, &mut cfg.auto_show, t.auto_show).changed();
+        ui.label(egui::RichText::new(t.auto_show_hint).size(12.0).weak());
     });
     card(ui, p, |ui| {
         changes.autostart |= toggle(ui, &mut cfg.autostart, t.autostart).changed();

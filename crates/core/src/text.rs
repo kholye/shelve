@@ -48,6 +48,8 @@ pub struct Text {
     pub cancel: &'static str,
     pub behavior: &'static str,
     pub auto_show: &'static str,
+    /// Under the switch: how the shelf still opens with it off.
+    pub auto_show_hint: &'static str,
     pub autostart: &'static str,
     pub language: &'static str,
     pub version: &'static str,
@@ -87,6 +89,7 @@ const EN: Text = Text {
     cancel: "Cancel",
     behavior: "Behavior",
     auto_show: "Show the shelf when a file is dragged to the edge",
+    auto_show_hint: "When off, open the shelf with the hotkey, the tray icon or the tab at the screen edge (it shows while the shelf is not empty)",
     autostart: "Start with Windows",
     language: "Language",
     version: "Shelve, version",
@@ -126,6 +129,7 @@ const RU: Text = Text {
     cancel: "Отмена",
     behavior: "Поведение",
     auto_show: "Показывать полку, когда файл тащат к краю",
+    auto_show_hint: "Если выключено, полку открывают горячая клавиша, значок в трее и язычок у края экрана (он виден, когда полка не пуста)",
     autostart: "Запускать вместе с Windows",
     language: "Язык",
     version: "Shelve, версия",
@@ -278,6 +282,15 @@ mod tests {
             (111, "111 объектов"),
         ] {
             assert_eq!(Lang::Ru.count(n), s);
+        }
+    }
+
+    #[test]
+    fn auto_show_hint_names_the_hotkey_from_the_settings() {
+        for lang in Lang::ALL {
+            let t = lang.text();
+            let hint = t.auto_show_hint.to_lowercase();
+            assert!(hint.contains(&t.hotkey.to_lowercase()), "{lang:?}: {hint}");
         }
     }
 
