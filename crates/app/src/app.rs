@@ -79,6 +79,8 @@ pub struct ShelfApp {
     pub file_over: bool,
     /// What the tab was last told; None while it is hidden.
     pub tab: Option<TabSpec>,
+    /// The row a drop just added: the list shows it until the rows settle.
+    pub scroll_to: Option<PathBuf>,
 }
 
 /// Starts the mouse hook and edge sensor; None if "show while dragging" is off. Its events
@@ -371,6 +373,9 @@ impl eframe::App for ShelfApp {
                 self.presence.remove(&item.path);
                 self.presence_queue.check(item.path.clone());
             }
+            if self.shelf.items().len() > before {
+                self.scroll_to = self.shelf.items().last().map(|i| i.path.clone());
+            }
         }
         self.rows.sync(self.shelf.items(), now, self.animate);
         let target = self.target_h();
@@ -463,9 +468,16 @@ impl ShelfApp {
                         let look = (&palette, file_over, self.cfg.lang);
                         // Lent too: `icon` borrows `self` mutably.
                         let presence = std::mem::take(&mut self.presence);
-                        let action = shelf_view(ui, &rows, now, look, &presence, &mut |item| {
-                            self.icon(&ctx, item)
-                        });
+                        let scroll_to = self.scroll_to.clone();
+                        let action = shelf_view(
+                            ui,
+                            &rows,
+                            now,
+                            look,
+                            &presence,
+                            scroll_to.as_deref(),
+                            &mut |item| self.icon(&ctx, item),
+                        );
                         self.presence = presence;
                         action
                     })
@@ -473,6 +485,10 @@ impl ShelfApp {
             })
             .inner;
         self.rows = rows;
+        if !self.rows.animating(now) {
+            // The new row has its full height; from now on the user scrolls freely.
+            self.scroll_to = None;
+        }
         if !file_over {
             // With a file over the shelf the view draws its own accent border.
             ui.painter().rect_stroke(

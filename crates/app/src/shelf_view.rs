@@ -42,6 +42,7 @@ pub fn shelf_view(
     now: Instant,
     (p, file_over, lang): (&Palette, bool, Lang),
     presence: &Presence,
+    scroll_to: Option<&std::path::Path>,
     icon: &mut dyn FnMut(&ShelfItem) -> Option<egui::TextureHandle>,
 ) -> Option<Action> {
     let panel = ui.max_rect();
@@ -87,6 +88,13 @@ pub fn shelf_view(
                     };
                     let size = vec2(ui.available_width(), ROW_H * look.height);
                     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                    if scroll_to == Some(r.item.path.as_path()) {
+                        // Its full height, though it may still be growing in.
+                        ui.scroll_to_rect(
+                            Rect::from_min_size(rect.min, vec2(rect.width(), ROW_H)),
+                            None,
+                        );
+                    }
                     if look.height <= 0.0 || !ui.is_rect_visible(rect) {
                         continue; // hundreds of items: only the visible ones cost anything
                     }
@@ -531,6 +539,16 @@ mod tests {
         lang: Lang,
         events: Vec<egui::Event>,
     ) -> Option<Action> {
+        pass_to(ctx, items, presence, (file_over, lang, None), events)
+    }
+
+    fn pass_to(
+        ctx: &egui::Context,
+        items: &[ShelfItem],
+        presence: &Presence,
+        (file_over, lang, scroll_to): (bool, Lang, Option<&std::path::Path>),
+        events: Vec<egui::Event>,
+    ) -> Option<Action> {
         let input = egui::RawInput {
             screen_rect: Some(PANEL),
             events,
@@ -543,7 +561,7 @@ mod tests {
         rows.sync(items, now, false);
         let mut out = ctx.run_ui(input, |ui| {
             let look = (&p, file_over, lang);
-            action = shelf_view(ui, &rows, now, look, presence, &mut |_| None);
+            action = shelf_view(ui, &rows, now, look, presence, scroll_to, &mut |_| None);
         });
         out.textures_delta.clear();
         action
@@ -759,6 +777,37 @@ mod tests {
         pass(&ctx, &items, false, vec![button(at, true)]);
         let moved = egui::Event::PointerMoved(at - vec2(40.0, 0.0));
         assert_eq!(pass(&ctx, &items, false, vec![moved]), None);
+    }
+
+    #[test]
+    fn the_list_scrolls_to_a_row_asked_for() {
+        // A file dropped on a long shelf lands at the end, below the visible part.
+        let many: Vec<ShelfItem> = (0..30)
+            .map(|i| ShelfItem {
+                path: PathBuf::from(format!(r"C:\shelve-нет\{i}.txt")),
+                kind: ItemKind::File,
+            })
+            .collect();
+        let last = many[29].path.as_path();
+        let bottom = PANEL.bottom() - PAD_BOTTOM;
+        let row = Rect::from_min_max(
+            pos2(PANEL.left(), bottom - ROW_H),
+            pos2(PANEL.right(), bottom),
+        );
+        let at = remove_rect(row).center();
+        let ctx = egui::Context::default();
+        // Clock does not run in a test: scroll there in one frame.
+        ctx.all_styles_mut(|s| s.scroll_animation = egui::style::ScrollAnimation::none());
+        let none = Presence::new();
+        let run = |events| pass_to(&ctx, &many, &none, (false, Lang::En, Some(last)), events);
+        run(vec![]);
+        run(vec![]); // the list has moved by now
+        run(vec![egui::Event::PointerMoved(at)]);
+        run(vec![button(at, true)]);
+        assert_eq!(
+            run(vec![button(at, false)]),
+            Some(Action::Remove(last.to_path_buf()))
+        );
     }
 
     #[test]

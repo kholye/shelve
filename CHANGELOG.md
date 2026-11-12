@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A file dropped on a long shelf no longer lands out of sight: the list scrolls down to its new row.
+
 ## 0.3.0
 
 - Shelve checks for updates: about ten seconds after start and then once a day it asks GitHub for the latest release. When a newer version is out, a card at the top of the settings window names it and has a "Download" button that opens the release page. Nothing is downloaded or installed by itself.

@@ -140,6 +140,7 @@ fn main() -> eframe::Result {
                 shared,
                 file_over: false,
                 tab: None,
+                scroll_to: None,
             }))
         }),
     )
