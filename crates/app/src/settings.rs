@@ -286,8 +286,47 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
 
     ui.add_space(2.0);
     let version = format!("{} {}", t.version, env!("CARGO_PKG_VERSION"));
-    ui.label(egui::RichText::new(version).size(12.0).weak());
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(version).size(12.0).weak());
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            project_link(ui, t.project_page);
+        });
+    });
     changes.any |= changes.hook || changes.hotkey || changes.autostart || changes.lang;
+}
+
+const PROJECT_URL: &str = "https://github.com/kholye/shelve";
+
+/// The project page link: text and a drawn "opens outside" arrow, one click target.
+fn project_link(ui: &mut egui::Ui, text: &str) {
+    let color = ui.visuals().hyperlink_color;
+    let font = egui::FontId::proportional(12.0);
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), font, color);
+    let (icon, gap) = (10.0, 4.0);
+    let size = egui::vec2(galley.size().x + gap + icon, galley.size().y);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let response = response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(PROJECT_URL);
+    if response.clicked() {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(PROJECT_URL));
+    }
+    let painter = ui.painter();
+    let text_pos = rect.left_top();
+    if response.hovered() {
+        let y = text_pos.y + galley.size().y - 1.0;
+        let x = text_pos.x..=text_pos.x + galley.size().x;
+        painter.hline(x, y, egui::Stroke::new(1.0, color));
+    }
+    painter.galley(text_pos, galley, color);
+    let o = egui::pos2(rect.right() - icon, rect.center().y - icon / 2.0);
+    let at = |x: f32, y: f32| o + egui::vec2(x, y);
+    let stroke = egui::Stroke::new(1.2, color);
+    // A box open at the top right, and an arrow leaving through the gap.
+    let corners = [(4.0, 1.0), (1.0, 1.0), (1.0, 9.0), (9.0, 9.0), (9.0, 6.0)];
+    painter.line(corners.map(|(x, y)| at(x, y)).to_vec(), stroke);
+    painter.line(vec![at(6.0, 1.0), at(9.0, 1.0), at(9.0, 4.0)], stroke);
+    painter.line_segment([at(9.0, 1.0), at(4.5, 5.5)], stroke);
 }
 
 fn id() -> egui::ViewportId {

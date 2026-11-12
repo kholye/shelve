@@ -3,6 +3,7 @@
 ## Unreleased
 
 - New icon: a stack of three cards on a dark blue tile, drawn pixel by pixel for the 16 and 24 px sizes so the gaps between the cards stay sharp.
+- The settings window links to the project page on GitHub, at the right of the version line.
 
 ## 0.2.0
 

@@ -49,6 +49,7 @@ pub struct Text {
     pub autostart: &'static str,
     pub language: &'static str,
     pub version: &'static str,
+    pub project_page: &'static str,
 
     pub tray_toggle: &'static str,
     pub quit: &'static str,
@@ -83,6 +84,7 @@ const EN: Text = Text {
     autostart: "Start with Windows",
     language: "Language",
     version: "Shelve, version",
+    project_page: "Project page",
 
     tray_toggle: "Show/hide",
     quit: "Exit",
@@ -117,6 +119,7 @@ const RU: Text = Text {
     autostart: "Запускать вместе с Windows",
     language: "Язык",
     version: "Shelve, версия",
+    project_page: "Страница проекта",
 
     tray_toggle: "Показать/скрыть",
     quit: "Выход",
