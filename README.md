@@ -2,7 +2,7 @@
 
 A file shelf at the edge of the screen, for Windows 10 and 11.
 
-![Two files are dragged to the screen edge and dropped on the shelf, then one is dragged back out into a folder](docs/demo.gif)
+![Two files are dragged to the screen edge and dropped on the shelf, then one is moved out into a folder and leaves the shelf; the shelf hides and a tab stays at the edge](docs/demo.gif)
 
 Start dragging a file, bring it to the edge of the screen, and a small panel slides out. Drop the file there. Then open the folder or the program it should go to and drag it off the shelf.
 
