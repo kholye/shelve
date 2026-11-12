@@ -230,6 +230,21 @@ fn run(
     }
 }
 
+/// Explorer's name order: case ignored, digits by value (скан_2 before скан_10).
+pub fn compare_names(a: &std::path::Path, b: &std::path::Path) -> std::cmp::Ordering {
+    use std::os::windows::ffi::OsStrExt;
+    let wide =
+        |p: &std::path::Path| -> Vec<u16> { p.as_os_str().encode_wide().chain([0]).collect() };
+    let (a, b) = (wide(a), wide(b));
+    let r = unsafe {
+        windows::Win32::UI::Shell::StrCmpLogicalW(
+            windows::core::PCWSTR(a.as_ptr()),
+            windows::core::PCWSTR(b.as_ptr()),
+        )
+    };
+    r.cmp(&0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

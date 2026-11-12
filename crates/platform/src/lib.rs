@@ -10,10 +10,10 @@ pub use tab_paint::{tab_pixels, TabColors, TAB_SIZE};
 
 #[cfg(windows)]
 pub use crate::windows::{
-    acquire_single_instance, animations_enabled, cursor_state, file_icon, hide_shelf_window,
-    https_get, is_autostart, monitor_at_cursor, prepare_shelf_window, set_autostart,
-    show_shelf_window, start, start_drag_out, start_mouse_hook, system_look, trim_memory,
-    try_hotkey, MouseHook, PlatformHandle, SingleInstance, SystemLook,
+    acquire_single_instance, animations_enabled, compare_names, cursor_state, file_icon,
+    hide_shelf_window, https_get, is_autostart, monitor_at_cursor, prepare_shelf_window,
+    set_autostart, show_shelf_window, start, start_drag_out, start_mouse_hook, system_look,
+    trim_memory, try_hotkey, MouseHook, PlatformHandle, SingleInstance, SystemLook,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

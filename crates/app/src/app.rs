@@ -552,11 +552,21 @@ fn tab_colors(p: &Palette) -> TabColors {
 }
 
 /// Adds only paths that exist; returns how many were actually added.
+/// Explorer hands over the grabbed file first, so the batch is put in its folder order:
+/// folders, then names as Explorer sorts them.
 pub fn accept_drop(shelf: &mut Shelf, paths: Vec<PathBuf>) -> usize {
-    paths
+    let mut paths: Vec<(bool, PathBuf)> = paths
         .into_iter()
         .filter(|p| p.exists())
-        .filter(|p| shelf.add(p.clone()))
+        .map(|p| (!p.is_dir(), p))
+        .collect();
+    paths.sort_by(|(af, a), (bf, b)| {
+        af.cmp(bf)
+            .then_with(|| shelve_platform::compare_names(a, b))
+    });
+    paths
+        .into_iter()
+        .filter(|(_, p)| shelf.add(p.clone()))
         .count()
 }
 
@@ -665,6 +675,28 @@ mod tests {
         let mut shelf = Shelf::new();
         let added = accept_drop(&mut shelf, vec![a, dir.clone(), dir.join("нет такого.txt")]);
         assert_eq!(added, 2);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn accept_drop_puts_folders_first_then_names_in_number_order() {
+        // Explorer hands over the grabbed file first: 10, 2, 1 came out in that order.
+        let dir = temp_dir("order");
+        let names = ["скан_10.txt", "скан_2.txt", "Скан_1.txt"];
+        for n in names {
+            std::fs::write(dir.join(n), b"x").unwrap();
+        }
+        std::fs::create_dir_all(dir.join("папка")).unwrap();
+        let mut dropped: Vec<PathBuf> = names.iter().map(|n| dir.join(n)).collect();
+        dropped.insert(1, dir.join("папка"));
+        let mut shelf = Shelf::new();
+        accept_drop(&mut shelf, dropped);
+        let got: Vec<_> = shelf.items().iter().map(|i| i.path.clone()).collect();
+        let want: Vec<_> = ["папка", "Скан_1.txt", "скан_2.txt", "скан_10.txt"]
+            .iter()
+            .map(|n| dir.join(n))
+            .collect();
+        assert_eq!(got, want);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
