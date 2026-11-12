@@ -113,7 +113,7 @@ impl Settings {
         let title = self.lock().cfg.lang.text().settings_title;
         let builder = egui::ViewportBuilder::default()
             .with_title(title)
-            .with_inner_size([420.0, 525.0])
+            .with_inner_size([420.0, 540.0])
             .with_resizable(false)
             .with_icon(crate::window::app_icon());
         let state = self.clone();
