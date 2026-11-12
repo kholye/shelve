@@ -188,6 +188,8 @@ fn header_line(
 
 fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> Option<Action> {
     let small = FontId::proportional(12.0);
+    // First, so the buttons and the counter laid over it take their own clicks.
+    let free = ui.interact(rect, ui.scope_id().with("header"), Sense::click());
     let gear = gear_rect(rect);
     let gear_resp = ui
         .interact(gear, ui.scope_id().with("settings"), Sense::click())
@@ -243,6 +245,8 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
         Some(Action::DragOutAll(DragButton::Left))
     } else if all_resp.drag_started_by(PointerButton::Secondary) {
         Some(Action::DragOutAll(DragButton::Right))
+    } else if free.clicked() || all_resp.clicked() {
+        Some(Action::Deselect)
     } else {
         None // the middle button does not drag files out
     }
@@ -908,14 +912,24 @@ mod tests {
     }
 
     #[test]
-    fn a_click_on_the_header_counter_does_nothing() {
-        // Not even the press: with drag sense alone it started the drag right away.
+    fn a_click_on_the_header_counter_only_deselects() {
+        // The press does nothing: with drag sense alone it started the drag right away.
         let (items, at) = (existing(2), on_counter());
         let ctx = egui::Context::default();
         pass(&ctx, &items, false, vec![]);
         pass(&ctx, &items, false, vec![egui::Event::PointerMoved(at)]);
         assert_eq!(pass(&ctx, &items, false, vec![button(at, true)]), None);
-        assert_eq!(pass(&ctx, &items, false, vec![button(at, false)]), None);
+        assert_eq!(
+            pass(&ctx, &items, false, vec![button(at, false)]),
+            Some(Action::Deselect)
+        );
+    }
+
+    #[test]
+    fn a_click_on_free_header_space_deselects() {
+        // Above the buttons, in the middle of the header: no button there.
+        let at = pos2(PANEL.center().x, header_rect(PANEL).top() + 2.0);
+        assert_eq!(click(&existing(2), at), Some(Action::Deselect));
     }
 
     #[test]

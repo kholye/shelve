@@ -179,6 +179,7 @@ impl ShelfApp {
         shelve_platform::hide_shelf_window(self.hwnd);
         self.visible = false;
         self.placed_h = None;
+        self.selection.clear();
         *self.shared.lock().unwrap() = None;
         self.sync_tab();
         // Once per hide, not per frame. The settings window is still being drawn and

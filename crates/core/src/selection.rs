@@ -24,7 +24,9 @@ impl Selection {
                 self.paths = items[a..=b].iter().map(|i| i.path.clone()).collect();
             }
             _ => {
-                if !ctrl {
+                // A plain click on the only selected row takes it away, as Ctrl would.
+                let only = self.paths.len() == 1 && self.paths.contains(path);
+                if !ctrl && !only {
                     self.paths.clear();
                 }
                 if !self.paths.remove(path) {
@@ -102,6 +104,25 @@ mod tests {
         sel.click(&it, &it[1].path, false, false);
         sel.click(&it, &it[2].path, false, false);
         assert_eq!(picked(&sel, &it), [2]);
+    }
+
+    #[test]
+    fn a_plain_click_on_the_only_selected_row_deselects_it() {
+        let it = items(3);
+        let mut sel = Selection::default();
+        sel.click(&it, &it[1].path, false, false);
+        sel.click(&it, &it[1].path, false, false);
+        assert!(sel.is_empty());
+    }
+
+    #[test]
+    fn a_plain_click_on_one_of_several_selected_keeps_only_it() {
+        let it = items(3);
+        let mut sel = Selection::default();
+        sel.click(&it, &it[0].path, false, false);
+        sel.click(&it, &it[1].path, true, false);
+        sel.click(&it, &it[1].path, false, false);
+        assert_eq!(picked(&sel, &it), [1]);
     }
 
     #[test]
