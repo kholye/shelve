@@ -47,6 +47,43 @@ pub fn cut_middle(name: &str, fits: impl Fn(&str) -> bool) -> String {
     joined(lo)
 }
 
+/// The whole folder the file lies in, for the second line of the row under the mouse.
+pub fn folder_path(path: &Path) -> String {
+    match path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        Some(dir) => dir.display().to_string(),
+        None => folder_label(path),
+    }
+}
+
+/// A path too long for `fits` loses whole folders in its middle: the drive (or the
+/// network server and share) and the last folder always stay. When even that does not
+/// fit, it is returned and the caller cuts it.
+pub fn cut_path(path: &str, fits: impl Fn(&str) -> bool) -> String {
+    let parts: Vec<&str> = path.split('\\').collect();
+    let n = parts.len();
+    let root = if path.starts_with(r"\\") { 4 } else { 1 };
+    if fits(path) || n <= root + 1 {
+        return path.to_owned();
+    }
+    let joined =
+        |h: usize, t: usize| format!(r"{}\…\{}", parts[..h].join(r"\"), parts[n - t..].join(r"\"));
+    // Grow the end and the start by turns, while a folder is still left out.
+    let (mut h, mut t) = (root, 1);
+    let mut grew = true;
+    while grew {
+        grew = false;
+        if h + t + 1 < n && fits(&joined(h, t + 1)) {
+            t += 1;
+            grew = true;
+        }
+        if h + t + 1 < n && fits(&joined(h + 1, t)) {
+            h += 1;
+            grew = true;
+        }
+    }
+    joined(h, t)
+}
+
 fn root_label(root: &Path) -> String {
     if let Some(Component::Prefix(prefix)) = root.components().next() {
         if let Prefix::UNC(server, share) | Prefix::VerbatimUNC(server, share) = prefix.kind() {
@@ -130,5 +167,39 @@ mod tests {
     #[test]
     fn too_narrow_for_the_extension_keeps_only_the_end() {
         assert_eq!(cut_middle("Договор аренды.pdf", up_to(4)), "…енды.pdf");
+    }
+
+    #[test]
+    fn folder_path_is_the_whole_parent_directory() {
+        assert_eq!(
+            folder_path(Path::new(r"C:\Users\a\Папка\x.txt")),
+            r"C:\Users\a\Папка"
+        );
+        assert_eq!(folder_path(Path::new(r"D:\x.txt")), r"D:\");
+        assert!(!folder_path(Path::new(r"D:\")).is_empty());
+    }
+
+    #[test]
+    fn a_path_that_fits_is_left_alone() {
+        assert_eq!(cut_path(r"C:\a\b", up_to(20)), r"C:\a\b");
+    }
+
+    #[test]
+    fn a_long_path_loses_whole_folders_in_the_middle() {
+        let path = r"C:\Users\admin\sandbox\design\Пять";
+        assert_eq!(cut_path(path, up_to(28)), r"C:\Users\admin\…\design\Пять");
+        assert_eq!(cut_path(path, up_to(22)), r"C:\Users\…\design\Пять");
+        assert_eq!(cut_path(path, up_to(12)), r"C:\…\Пять");
+    }
+
+    #[test]
+    fn a_network_path_keeps_its_server_and_share() {
+        let path = r"\\server\share\one\two\three\Пять";
+        assert_eq!(cut_path(path, up_to(22)), r"\\server\share\…\Пять");
+    }
+
+    #[test]
+    fn too_narrow_for_any_folder_keeps_the_root_and_the_last_one() {
+        assert_eq!(cut_path(r"C:\Users\admin\Пять", up_to(3)), r"C:\…\Пять");
     }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The folder path no longer pops up in a box that covers the rows below: with the mouse on a row, its second line shows the path to the folder instead of the folder name. A long path loses folders in the middle and keeps the drive (or the network share) and the last folder.
+
 ## 0.4.0
 
 - Several rows come off in one drag: pick them as in Explorer (click, Ctrl+click, Shift+click) and drag any of them. Picked rows are tinted with the accent colour; the choice is dropped by a second click on the only picked row, a click on the header outside its buttons or on the empty space under the rows, and when the shelf hides. A row that is not picked still goes alone.
