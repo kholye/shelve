@@ -8,6 +8,7 @@
 - Everything on the shelf comes off in one drag: drag the "24 items" line in the header. It moves like a single row (Ctrl copies, the right button brings up the Windows menu); files that are gone stay behind.
 - Several files dropped at once land in Explorer's order, folders first, then by name with numbers in order ("scan_2" before "scan_10"). Before, the batch started with the file the drag was grabbed by.
 - A line under "Show the shelf when a file is dragged to the edge" in the settings says how the shelf opens with the switch off: by the hotkey, the tray icon or the tab at the screen edge.
+- In Russian, the line under a file that is gone is shorter, "Нет файла. Щёлкните — убрать", so it is read to the end even with the mouse on the row.
 
 ## 0.3.0
 

@@ -110,7 +110,7 @@ const RU: Text = Text {
     ctrl_copy: "Ctrl — копия",
     drag_all: "Перетащите, чтобы забрать с полки всё",
     settings: "Настройки",
-    missing: "Файл не найден. Щёлкните, чтобы убрать",
+    missing: "Нет файла. Щёлкните — убрать",
     remove: "Убрать с полки",
 
     settings_title: "Shelve: настройки",

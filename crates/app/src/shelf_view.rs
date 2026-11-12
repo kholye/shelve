@@ -644,6 +644,32 @@ mod tests {
         assert_eq!(released, None, "a present row ignores a click");
     }
 
+    #[test]
+    fn missing_label_fits_a_hovered_row_in_every_language() {
+        let ctx = egui::Context::default();
+        crate::theme::install_font(&ctx);
+        // The same room `row` gives the second line while the remove button shows.
+        let rect = row_rect(0);
+        let width = remove_rect(rect).left() - 4.0 - (row_body(rect).left() + 8.0 + ICON + 10.0);
+        let format = TextFormat {
+            font_id: FontId::proportional(11.0),
+            ..Default::default()
+        };
+        let input = egui::RawInput {
+            screen_rect: Some(PANEL),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            for lang in Lang::ALL {
+                let label = lang.text().missing;
+                let job = LayoutJob::single_section(label.to_owned(), format.clone());
+                let w = ui.painter().layout_job(job).size().x;
+                assert!(w <= width, "{lang:?}: {label} is {w} px, room {width} px");
+            }
+        });
+        out.textures_delta.clear();
+    }
+
     fn button(at: Pos2, pressed: bool) -> egui::Event {
         egui::Event::PointerButton {
             pos: at,
