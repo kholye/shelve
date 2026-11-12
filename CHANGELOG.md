@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New icon: a stack of three cards on a dark blue tile, drawn pixel by pixel for the 16 and 24 px sizes so the gaps between the cards stay sharp.
+
 ## 0.2.0
 
 - A row dragged off the shelf with the left mouse button moves the file. Ctrl makes a copy, and the right button brings up the Windows Copy / Move menu. The row leaves the shelf once Explorer has moved the file. The header shows the Ctrl hint.
