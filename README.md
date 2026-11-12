@@ -2,7 +2,7 @@
 
 A file shelf at the edge of the screen, for Windows 10 and 11.
 
-![Two files are dragged to the screen edge and dropped on the shelf, then one is moved out into a folder and leaves the shelf; the shelf hides and a tab stays at the edge](docs/demo.gif)
+![Three files are dragged to the screen edge and dropped on the shelf; two of them are picked with Ctrl+click and moved out into a folder together, they leave the shelf, and the shelf hides behind a tab at the edge](docs/demo.gif)
 
 Start dragging a file, bring it to the edge of the screen, and a small panel slides out. Drop the file there. Then open the folder or the program it should go to and drag it off the shelf.
 
@@ -20,7 +20,7 @@ Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off 
 
 ## Use
 
-![The shelf with four items](docs/shelf.png)
+![The shelf with seven items: two picked rows are tinted, a long name is shortened in the middle, and the full path shows in a box under the row the mouse rests on](docs/shelf.png)
 
 - **Put a file on it.** Drag a file or a folder to the screen edge (the right one by default) and drop it on the shelf when it slides out. `Ctrl+Alt+D` or "Show/hide" in the tray menu opens the shelf without dragging anything. New rows go to the end; several files dropped at once line up as in Explorer, folders first, then by name ("scan_2" before "scan_10"), whichever one you grabbed. On a long shelf the list scrolls down to them. A name too long for its row is shortened in the middle, so its end with the extension stays in sight: "Lease agreement (s…ned).pdf". Rest the mouse on the row to see the full path in a box just under the row, as wide as the shelf, with a small arrow pointing up at the row; at the bottom of the shelf the box stands over the row instead. A long path wraps onto more lines so it stays on screen.
 - **Take a file off it.** Drag a row into a folder or onto the desktop with the left mouse button and the file moves there. Its row leaves the shelf once Explorer has finished moving it: usually at once, for a big file going to another drive when the copying is done. Shelve itself never deletes anything.
@@ -52,7 +52,7 @@ Changes apply at once.
 
 ## Updates
 
-About ten seconds after start and then once a day, Shelve asks GitHub whether a newer release is out. If one is, a card at the top of the settings window says so ("Shelve 0.4.0 is out, you have 0.3.0") and its "Download" button opens the release page in the browser. Nothing is downloaded or installed by itself: download the new `shelve.exe`, exit Shelve from the tray menu and put the new file in place of the old one. Settings stay.
+About ten seconds after start and then once a day, Shelve asks GitHub whether a newer release is out. If one is, a card at the top of the settings window says so ("Shelve 0.5.0 is out, you have 0.4.0") and its "Download" button opens the release page in the browser. Nothing is downloaded or installed by itself: download the new `shelve.exe`, exit Shelve from the tray menu and put the new file in place of the old one. Settings stay.
 
 The request goes to `api.github.com` and sends nothing about you or your files. To turn it off, switch off "Check for updates" under Behavior. Versions before 0.3.0 do not check, so from 0.2.0 or older update by hand once.
 
@@ -73,7 +73,7 @@ Measured on Windows 10 22H2 with an NVIDIA card at 100% scale, release build.
 
 | | |
 |---|---|
-| Size of the exe | 5.2 MB |
+| Size of the exe | 5.3 MB |
 | Memory after start, shelf hidden | 55 MB |
 | Memory with the shelf shown and a few files on it | 65 to 70 MB |
 | Memory with the shelf hidden again | 5 to 8 MB |
