@@ -43,10 +43,16 @@ Click the gear on the shelf, or "Settings" in the tray menu.
 
 - **Position.** Click one of the six spots on the picture of the screen: left or right edge; top, centre or bottom.
 - **Hotkey.** Click "Change" and press the new combination. Esc cancels. If another program already holds the combination, Shelve says so and keeps the old one.
-- **Behavior.** Whether the shelf comes out when a file is dragged to the edge, and whether Shelve starts with Windows. Autostart is set for the current user only.
+- **Behavior.** Whether the shelf comes out when a file is dragged to the edge, whether Shelve starts with Windows, and whether it checks for updates. Autostart is set for the current user only.
 - **Language.** English or Russian.
 
 Changes apply at once.
+
+## Updates
+
+About ten seconds after start and then once a day, Shelve asks GitHub whether a newer release is out. If one is, a card at the top of the settings window says so ("Shelve 0.4.0 is out, you have 0.3.0") and its "Download" button opens the release page in the browser. Nothing is downloaded or installed by itself: download the new `shelve.exe`, exit Shelve from the tray menu and put the new file in place of the old one. Settings stay.
+
+The request goes to `api.github.com` and sends nothing about you or your files. To turn it off, switch off "Check for updates" under Behavior. Versions before 0.3.0 do not check, so from 0.2.0 or older update by hand once.
 
 ## Limitations
 

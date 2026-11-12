@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
+- Shelve checks for updates: about ten seconds after start and then once a day it asks GitHub for the latest release. When a newer version is out, a card at the top of the settings window names it and has a "Download" button that opens the release page. Nothing is downloaded or installed by itself.
+- "Check for updates" under Behavior in the settings turns the check off. It is on by default, also for those who come from an older version.
 - New icon: a stack of three cards on a dark blue tile, drawn pixel by pixel for the 16 and 24 px sizes so the gaps between the cards stay sharp.
 - The settings window links to the project page on GitHub, at the right of the version line.
 
