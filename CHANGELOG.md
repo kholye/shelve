@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A file dropped on a long shelf no longer lands out of sight: the list scrolls down to its new row.
+- A file name too long for its row is shortened in the middle, not at the end, so the extension stays in sight: "Lease agreement (s…ned).pdf" instead of "Lease agreement (sig…". The header line is cut as before.
 
 ## 0.3.0
 

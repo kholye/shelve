@@ -22,7 +22,7 @@ Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off 
 
 ![The shelf with four items](docs/shelf.png)
 
-- **Put a file on it.** Drag a file or a folder to the screen edge (the right one by default) and drop it on the shelf when it slides out. `Ctrl+Alt+D` or "Show/hide" in the tray menu opens the shelf without dragging anything. New rows go to the end; on a long shelf the list scrolls down to them.
+- **Put a file on it.** Drag a file or a folder to the screen edge (the right one by default) and drop it on the shelf when it slides out. `Ctrl+Alt+D` or "Show/hide" in the tray menu opens the shelf without dragging anything. New rows go to the end; on a long shelf the list scrolls down to them. A name too long for its row is shortened in the middle, so its end with the extension stays in sight: "Lease agreement (s…ned).pdf". Rest the mouse on the row to see the full path.
 - **Take a file off it.** Drag a row into a folder or onto the desktop with the left mouse button and the file moves there. Its row leaves the shelf once Explorer has finished moving it: usually at once, for a big file going to another drive when the copying is done. Shelve itself never deletes anything.
 - **Copy instead.** Hold Ctrl when you let go: the file is copied and the row stays. The header reminds of it: "3 items · Ctrl: copy". Dragged with the right mouse button, the file brings up the Windows menu on the drop (Copy here, Move here); click the one you want.
 - A program window (a messenger, a browser) takes the file the way the program decides, usually as a copy.

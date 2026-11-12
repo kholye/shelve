@@ -10,7 +10,7 @@ use eframe::epaint::text::{LayoutJob, TextFormat, TextWrapping};
 use shelve_core::{ItemKind, Lang, ShelfItem, Text};
 use shelve_platform::DragButton;
 
-use crate::labels::folder_label;
+use crate::labels::{cut_middle, folder_label};
 use crate::layout::{HEADER_H, PAD_BOTTOM, RADIUS, ROW_H};
 use crate::presence::{is_missing, Presence};
 use crate::rows::Rows;
@@ -304,7 +304,7 @@ fn row(
         color: weak,
         ..Default::default()
     };
-    let name = one_line(ui, name, name_format, width);
+    let name = name_line(ui, name, name_format, width);
     let second = one_line(ui, second, second_format, width);
     let top = body.center().y - (name.size().y + second.size().y) / 2.0;
     let second_top = top + name.size().y;
@@ -352,6 +352,21 @@ fn one_line(
     let mut job = LayoutJob::single_section(text, format);
     job.wrap = TextWrapping::truncate_at_width(width);
     ui.painter().layout_job(job)
+}
+
+/// A file name in one line; a long one loses its middle, so the extension shows.
+fn name_line(
+    ui: &egui::Ui,
+    name: String,
+    format: TextFormat,
+    width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    let fits = |s: &str| {
+        let job = LayoutJob::single_section(s.to_owned(), format.clone());
+        ui.painter().layout_job(job).size().x <= width
+    };
+    let name = cut_middle(&name, fits);
+    one_line(ui, name, format, width)
 }
 
 fn drop_placeholder(ui: &egui::Ui, row: Rect, p: &Palette, t: &Text) {
@@ -753,6 +768,21 @@ mod tests {
             rect.left() + 12.0 + width <= clear_left - 8.0,
             "the line runs under Clear: {width}"
         );
+    }
+
+    #[test]
+    fn a_long_file_name_keeps_its_extension_in_the_row() {
+        let ctx = egui::Context::default();
+        let (mut text, mut width) = (String::new(), 0.0);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let name = "Договор аренды квартиры на Ленина (подписанный).pdf".to_owned();
+            let line = name_line(ui, name, TextFormat::default(), 160.0);
+            text = line.text().to_owned();
+            width = line.size().x;
+        });
+        out.textures_delta.clear();
+        assert!(text.ends_with(").pdf") && text.contains('…'), "{text}");
+        assert!(width <= 160.0, "the name runs past the row: {width}");
     }
 
     #[test]
