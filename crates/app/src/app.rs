@@ -555,13 +555,15 @@ impl ShelfApp {
     }
 }
 
-/// The tab is a piece of the shelf: its background and border, the arrow in the accent.
+/// The tab is a piece of the shelf: its background, a stronger border and an arrow in
+/// weak text, so it shows on dark wallpaper; the accent fills it under the mouse.
 fn tab_colors(p: &Palette) -> TabColors {
     let rgb = |c: egui::Color32| [c.r(), c.g(), c.b()];
     TabColors {
         bg: rgb(p.bg),
-        border: rgb(p.border),
+        border: rgb(p.tab_border),
         accent: rgb(p.accent),
+        arrow: rgb(p.text_weak),
     }
 }
 
@@ -615,6 +617,16 @@ mod tests {
         });
         out.textures_delta.clear();
         clicked
+    }
+
+    #[test]
+    fn the_tab_arrow_is_weak_text_and_its_border_the_tab_border() {
+        // On dark wallpaper the accent arrow and the shelf border were barely visible.
+        let p = theme::palette(true, [0x4C, 0x55, 0x60]);
+        let c = tab_colors(&p);
+        assert_eq!(c.arrow, [0xC2, 0xC2, 0xC2]);
+        assert_eq!(c.border, [0x5A, 0x5A, 0x5A]);
+        assert_eq!(c.accent, [p.accent.r(), p.accent.g(), p.accent.b()]);
     }
 
     #[test]

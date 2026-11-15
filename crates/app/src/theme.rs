@@ -13,6 +13,8 @@ const MIN_TEXT_CONTRAST: f32 = 4.5;
 pub struct Palette {
     pub bg: Color32,
     pub border: Color32,
+    /// The tab's border: stronger than `border`, the tab sits on wallpaper, not on the shelf.
+    pub tab_border: Color32,
     pub text: Color32,
     pub text_weak: Color32,
     pub hover: Color32,
@@ -27,10 +29,11 @@ pub struct Palette {
 
 pub fn palette(dark: bool, accent: [u8; 3]) -> Palette {
     let gray = Color32::from_gray;
-    let (bg, border, text, text_weak, hover, shadow_alpha) = if dark {
+    let (bg, border, tab_border, text, text_weak, hover, shadow_alpha) = if dark {
         (
             gray(0x2B),
             gray(0x45),
+            gray(0x5A),
             Color32::WHITE,
             gray(0xC2),
             gray(0x3A),
@@ -39,6 +42,7 @@ pub fn palette(dark: bool, accent: [u8; 3]) -> Palette {
     } else {
         (
             gray(0xF9),
+            gray(0xD0),
             gray(0xD0),
             gray(0x1B),
             gray(0x5A),
@@ -59,6 +63,7 @@ pub fn palette(dark: bool, accent: [u8; 3]) -> Palette {
     Palette {
         bg,
         border,
+        tab_border,
         text,
         text_weak,
         hover,

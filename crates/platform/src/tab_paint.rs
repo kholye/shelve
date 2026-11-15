@@ -10,8 +10,8 @@ pub const TAB_SIZE: (f32, f32) = (12.0, 48.0);
 const RADIUS: f32 = 6.0;
 const BORDER: f32 = 1.0;
 /// The arrow for a tab on the right edge (it points left), points: from, tip, to.
-const ARROW: [(f32, f32); 3] = [(7.5, 20.5), (4.5, 24.0), (7.5, 27.5)];
-const ARROW_HALF_WIDTH: f32 = 0.7;
+const ARROW: [(f32, f32); 3] = [(8.0, 19.0), (5.0, 24.0), (8.0, 29.0)];
+const ARROW_HALF_WIDTH: f32 = 1.0;
 /// Samples per pixel side; 4 × 4 smooths the curve and the arrow.
 const SAMPLES: u32 = 4;
 
@@ -20,8 +20,9 @@ const SAMPLES: u32 = 4;
 pub struct TabColors {
     pub bg: [u8; 3],
     pub border: [u8; 3],
-    /// The arrow; the whole tab while the mouse is on it.
+    /// The whole tab while the mouse is on it.
     pub accent: [u8; 3],
+    pub arrow: [u8; 3],
 }
 
 /// `w` × `h` pixels as premultiplied BGRA, top row first (for `UpdateLayeredWindow`).
@@ -37,7 +38,7 @@ pub fn tab_pixels(
     let (fill, border, arrow) = if hovered {
         (colors.accent, colors.accent, colors.bg)
     } else {
-        (colors.bg, colors.border, colors.accent)
+        (colors.bg, colors.border, colors.arrow)
     };
     let mut out = Vec::with_capacity((w * h * 4) as usize);
     let n = (SAMPLES * SAMPLES) as f32;
@@ -114,6 +115,7 @@ mod tests {
         bg: [0x2B, 0x2B, 0x2B],
         border: [0x45, 0x45, 0x45],
         accent: [0x8A, 0x97, 0xA8],
+        arrow: [0xC2, 0xC2, 0xC2],
     };
 
     /// Size in pixels at `scale`.
@@ -185,13 +187,24 @@ mod tests {
     }
 
     #[test]
-    fn the_arrow_points_into_the_screen_in_the_accent() {
+    fn the_arrow_points_into_the_screen_in_its_own_colour() {
         let (p, w) = paint(Edge::Right, false);
-        // The tip of the arrow, 4.5 pt from the inner side, at mid height.
-        assert_eq!(px(&p, w, 9, 48), rgb(COLORS.accent));
+        // The tip of the arrow, 5 pt from the inner side, at mid height.
+        assert_eq!(px(&p, w, 9, 48), rgb(COLORS.arrow));
         // Further right, at mid height, is the open side of the arrow: fill.
         assert_eq!(px(&p, w, 14, 48), rgb(COLORS.bg));
         assert_eq!(px(&p, w, 16, 10), rgb(COLORS.bg));
+    }
+
+    #[test]
+    fn the_arrow_is_2_pt_thick_and_10_pt_tall() {
+        let (p, w) = paint(Edge::Right, false);
+        // Lower end of the arrow at (8, 29) pt.
+        assert_eq!(px(&p, w, 16, 58), rgb(COLORS.arrow));
+        // 0.9 pt beside the middle of the upper stroke, (6.5, 21.5) pt, still on it.
+        let at = |x, y| colour_at(x, y, COLORS.bg, COLORS.border, COLORS.arrow);
+        assert_eq!(at(7.27, 21.96), Some(COLORS.arrow));
+        assert_eq!(at(7.45, 22.07), Some(COLORS.bg));
     }
 
     #[test]

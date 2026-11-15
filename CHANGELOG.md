@@ -6,6 +6,7 @@
 - "Clear" in the shelf header and "Project page" in settings are easier to read: text in the accent colour is lightened in the dark theme (darkened in the light one) until it has normal text contrast. Icons keep the accent as it was.
 - A picked row no longer looks like the row under the mouse: it has a short accent stripe at the left, as in Windows 11 lists. The mouse on a picked row now highlights it too, and the stripe stays.
 - A file carried over an empty shelf is easier to notice: the frame under the shelf drawing fills with the accent colour, the drawing turns the background colour, and "Drop to add" is shown in the normal text colour instead of grey.
+- The tab of a hidden shelf shows on dark wallpaper: its arrow is larger and twice as thick, drawn in the grey of secondary text instead of the accent, and in the dark theme its border is lighter. Under the mouse it still fills with the accent.
 
 ## 0.4.0
 
