@@ -223,9 +223,6 @@ const WINDOW_W: f32 = 420.0;
 const MARGIN: egui::Margin = egui::Margin::symmetric(16, 8);
 /// Height the new version card adds to the window, spacing included.
 const UPDATE_CARD_H: f32 = 72.0;
-/// The line under the greyed-out autostart switch.
-const AUTOSTART_HINT_H: f32 = 18.0;
-
 /// How long Windows may take to give the window the height it asked for.
 const GROW_TIME: Duration = Duration::from_millis(500);
 
@@ -246,12 +243,11 @@ fn scroll_bars(
     }
 }
 
-/// Tall enough that nothing needs scrolling: taller while the new version card is on top
-/// and while the autostart switch has its "not in portable mode" line.
+/// Tall enough that nothing needs scrolling: taller while the new version card is on top.
+/// The same with the portable switch on or off: a height change shows for a frame.
 fn window_height(s: &State) -> f32 {
     let card = if shows_update(s) { UPDATE_CARD_H } else { 0.0 };
-    let hint = if s.portable { AUTOSTART_HINT_H } else { 0.0 };
-    720.0 + hint + card
+    738.0 + card
 }
 
 /// The card is hidden at once when the switch goes off, before the checker hears of it.
@@ -424,14 +420,17 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         ui.label(egui::RichText::new(t.auto_show_hint).size(12.0).weak());
     });
     card(ui, p, |ui| {
-        if *portable {
+        // A line under it either way, so the portable switch never changes the height.
+        ui.spacing_mut().item_spacing.y = 2.0;
+        let hint = if *portable {
             // Shown off and greyed out; the saved choice is back when portable is left.
-            ui.spacing_mut().item_spacing.y = 2.0;
             ui.add_enabled_ui(false, |ui| toggle(ui, &mut false, t.autostart));
-            ui.label(egui::RichText::new(t.autostart_portable).size(12.0).weak());
+            t.autostart_portable
         } else {
             changes.autostart |= toggle(ui, &mut cfg.autostart, t.autostart).changed();
-        }
+            t.autostart_hint
+        };
+        ui.label(egui::RichText::new(hint).size(12.0).weak());
     });
     if let Some(e) = autostart_error {
         ui.colored_label(error, e.as_str());
@@ -720,6 +719,35 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_portable_switch_keeps_the_window_height() {
+        // Bug: the height changed with the switch; for a frame Windows showed the old
+        // picture in the new size, with the bottom line cut or an empty strip under it.
+        let tall = |portable| window_height(&Settings::new(&Config::default(), portable).lock());
+        assert_eq!(tall(false), tall(true));
+        for lang in Lang::ALL {
+            let s = Settings::new(
+                &Config {
+                    lang,
+                    ..Config::default()
+                },
+                false,
+            );
+            let p = Settings::new(
+                &Config {
+                    lang,
+                    ..Config::default()
+                },
+                true,
+            );
+            assert_eq!(
+                contents_height(&mut s.lock()),
+                contents_height(&mut p.lock()),
+                "{lang:?}"
+            );
         }
     }
 
