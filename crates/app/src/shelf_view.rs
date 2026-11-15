@@ -451,15 +451,13 @@ fn empty_plate(ui: &egui::Ui, panel: Rect, p: &Palette, file_over: bool, t: &Tex
         pos2(panel.center().x - 36.0, panel.top() + 22.0),
         vec2(72.0, 56.0),
     );
-    let color = if file_over { p.accent } else { p.text_weak };
-    if file_over {
-        ui.painter().rect_filled(plate, RADIUS, p.accent_bg);
-    }
-    dashed_rect(ui.painter(), plate, RADIUS, Stroke::new(1.5, color));
+    let [fill, line, glyph, text_color] = plate_colors(p, file_over);
+    ui.painter().rect_filled(plate, RADIUS, fill);
+    dashed_rect(ui.painter(), plate, RADIUS, Stroke::new(1.5, line));
     paint_shelf_glyph(
         ui.painter(),
         Rect::from_center_size(plate.center(), vec2(34.0, 34.0)),
-        color,
+        glyph,
     );
     let text = if file_over { t.drop_hint } else { t.empty_hint };
     ui.painter().text(
@@ -467,8 +465,19 @@ fn empty_plate(ui: &egui::Ui, panel: Rect, p: &Palette, file_over: bool, t: &Tex
         egui::Align2::CENTER_TOP,
         text,
         FontId::proportional(13.0),
-        p.text_weak,
+        text_color,
     );
+}
+
+/// Fill, outline, drawing and caption of the empty plate. A file over it gets one
+/// solid spot of the accent, seen from the corner of the eye.
+fn plate_colors(p: &Palette, file_over: bool) -> [Color32; 4] {
+    if file_over {
+        // `palette()` keeps 3:1 between accent and background, so the drawing reads.
+        [p.accent, p.accent, p.bg, p.text]
+    } else {
+        [Color32::TRANSPARENT, p.text_weak, p.text_weak, p.text_weak]
+    }
 }
 
 /// The app icon's drawing (shelf, two books, a leaning third) inside `rect`.
@@ -735,6 +744,21 @@ mod tests {
         let ctx = egui::Context::default();
         assert_eq!(pass(&ctx, &[], false, vec![]), None);
         assert_eq!(pass(&ctx, &[], true, vec![]), None);
+    }
+
+    #[test]
+    fn file_over_empty_shelf_fills_the_plate_with_the_accent() {
+        let p = palette(true, [0x4C, 0x55, 0x60]);
+        let [fill, line, glyph, text] = plate_colors(&p, true);
+        assert_eq!(fill, p.accent);
+        assert_eq!(line, p.accent);
+        assert_eq!(glyph, p.bg);
+        assert_eq!(text, p.text);
+        // Without a file the plate stays an outline in the quiet colour.
+        assert_eq!(
+            plate_colors(&p, false),
+            [Color32::TRANSPARENT, p.text_weak, p.text_weak, p.text_weak]
+        );
     }
 
     #[test]

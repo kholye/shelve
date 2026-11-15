@@ -5,6 +5,7 @@
 - The folder path no longer pops up in a box that covers the rows below: with the mouse on a row, its second line shows the path to the folder instead of the folder name. A long path loses folders in the middle and keeps the drive (or the network share) and the last folder.
 - "Clear" in the shelf header and "Project page" in settings are easier to read: text in the accent colour is lightened in the dark theme (darkened in the light one) until it has normal text contrast. Icons keep the accent as it was.
 - A picked row no longer looks like the row under the mouse: it has a short accent stripe at the left, as in Windows 11 lists. The mouse on a picked row now highlights it too, and the stripe stays.
+- A file carried over an empty shelf is easier to notice: the frame under the shelf drawing fills with the accent colour, the drawing turns the background colour, and "Drop to add" is shown in the normal text colour instead of grey.
 
 ## 0.4.0
 
