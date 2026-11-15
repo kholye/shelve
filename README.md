@@ -16,7 +16,19 @@ Download `shelve.exe` from the [latest release](../../releases/latest), put it i
 
 The file is not signed, so the first time you run it Windows SmartScreen shows a warning: click "More info", then "Run anyway". The release page has a SHA-256 checksum next to the file if you want to check the download.
 
-Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off "Start with Windows" in its settings, exit it from the tray menu, then delete the exe and that folder.
+### Where the settings are
+
+- **Usual mode:** in `%APPDATA%\shelve\config.json`, a file that appears the first time a setting is changed.
+- **Portable mode:** in `shelve.json` next to `shelve.exe`. Turn on "Keep settings next to the program" in the settings, or put an empty `shelve.json` beside the exe yourself. Shelve then writes nothing to `%APPDATA%` or the registry, and "Start with Windows" is greyed out. Use this mode to run Shelve from a flash drive on someone else's computer.
+
+Turning portable mode on moves the settings from `%APPDATA%` next to the exe, removes the `%APPDATA%\shelve` folder if nothing else is in it, and takes Shelve out of autostart. Turning it off moves them back, and autostart comes back if it was on before.
+
+### Removing Shelve
+
+- **Portable mode:** exit Shelve from the tray menu, then delete `shelve.exe` and `shelve.json`.
+- **Usual mode:** turn off "Start with Windows" in the settings, exit Shelve from the tray menu, then delete the exe and the `%APPDATA%\shelve` folder.
+
+Like with any program, Windows keeps some records of its own that Shelve cannot prevent: lists of programs that were run (Prefetch, BAM, Amcache), the tray icon cache, the video driver's shader cache, and the per-program network use the update check adds to. Only an administrator can clear them.
 
 ## Use
 
@@ -45,7 +57,7 @@ Click the sliders button on the shelf, or "Settings" in the tray menu.
 
 - **Position.** Click one of the six spots on the picture of the screen: left or right edge; top, centre or bottom.
 - **Hotkey.** Click "Change" and press the new combination. Esc cancels. If another program already holds the combination, Shelve says so and keeps the old one.
-- **Behavior.** Whether the shelf comes out when a file is dragged to the edge, whether Shelve starts with Windows, and whether it checks for updates. Autostart is set for the current user only. With the first switch off, the hotkey, the tray icon and the tab at the edge still open the shelf; a line under the switch says so.
+- **Behavior.** Whether the shelf comes out when a file is dragged to the edge, whether Shelve starts with Windows, and whether it checks for updates. Autostart is set for the current user only. With the first switch off, the hotkey, the tray icon and the tab at the edge still open the shelf; a line under the switch says so. "Keep settings next to the program" turns on portable mode (see [Where the settings are](#where-the-settings-are)).
 - **Language.** English or Russian.
 
 Changes apply at once.
