@@ -16,7 +16,7 @@ use crate::presence::{is_missing, Presence};
 use crate::rows::Rows;
 use crate::theme::Palette;
 
-/// Side of the square icon buttons (gear, remove).
+/// Side of the square icon buttons (settings, remove).
 const BUTTON: f32 = 28.0;
 const ICON: f32 = 32.0;
 /// Rows keep this far from the panel sides.
@@ -143,7 +143,7 @@ fn header_rect(panel: Rect) -> Rect {
     Rect::from_min_size(panel.min, vec2(panel.width(), HEADER_H))
 }
 
-fn gear_rect(header: Rect) -> Rect {
+fn settings_rect(header: Rect) -> Rect {
     Rect::from_center_size(
         pos2(header.right() - 6.0 - BUTTON / 2.0, header.center().y),
         vec2(BUTTON, BUTTON),
@@ -190,23 +190,30 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
     let small = FontId::proportional(12.0);
     // First, so the buttons and the counter laid over it take their own clicks.
     let free = ui.interact(rect, ui.scope_id().with("header"), Sense::click());
-    let gear = gear_rect(rect);
-    let gear_resp = ui
-        .interact(gear, ui.scope_id().with("settings"), Sense::click())
+    let settings = settings_rect(rect);
+    let settings_resp = ui
+        .interact(settings, ui.scope_id().with("settings"), Sense::click())
         .on_hover_text(t.settings);
-    gear_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, t.settings));
-    let under = if gear_resp.hovered() { p.hover } else { p.bg };
-    if gear_resp.hovered() {
-        ui.painter().rect_filled(gear, 4.0, under);
+    settings_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, t.settings));
+    let under = if settings_resp.hovered() {
+        p.hover
+    } else {
+        p.bg
+    };
+    if settings_resp.hovered() {
+        ui.painter().rect_filled(settings, 4.0, p.hover);
     }
-    paint_gear(ui.painter(), gear.center(), p.text_weak, under);
+    paint_settings(ui.painter(), settings.center(), p.text_weak, under);
 
     let label = ui
         .painter()
         .layout_no_wrap(t.clear.to_owned(), small, p.text_accent);
     let clear = Rect::from_min_max(
-        pos2(gear.left() - 2.0 - label.size().x - 16.0, gear.top()),
-        pos2(gear.left() - 2.0, gear.bottom()),
+        pos2(
+            settings.left() - 2.0 - label.size().x - 16.0,
+            settings.top(),
+        ),
+        pos2(settings.left() - 2.0, settings.bottom()),
     );
     let clear_resp = ui.interact(clear, ui.scope_id().with("clear"), Sense::click());
     clear_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, t.clear));
@@ -220,8 +227,8 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
     // The counter line is the handle that drags the whole shelf out. Click sense too, so
     // the drag starts only once the mouse moves, not on a mere press.
     let handle = Rect::from_min_max(
-        pos2(rect.left() + 4.0, gear.top()),
-        pos2(rect.left() + 12.0 + line.size().x + 8.0, gear.bottom()),
+        pos2(rect.left() + 4.0, settings.top()),
+        pos2(rect.left() + 12.0 + line.size().x + 8.0, settings.bottom()),
     );
     let all_resp = ui
         .interact(
@@ -238,7 +245,7 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
     ui.painter()
         .galley(pos2(rect.left() + 12.0, top), line, p.text_weak);
 
-    if gear_resp.clicked() {
+    if settings_resp.clicked() {
         Some(Action::OpenSettings)
     } else if clear_resp.clicked() {
         Some(Action::Clear)
@@ -506,7 +513,7 @@ fn paint_shelf_glyph(painter: &egui::Painter, rect: Rect, color: Color32) {
 
 /// Settings: two slider lines with a knob each, in a 16-point box around `c`. The knobs
 /// are filled with `under`, the fill behind the button, so they hide the line.
-fn paint_gear(painter: &egui::Painter, c: Pos2, color: Color32, under: Color32) {
+fn paint_settings(painter: &egui::Painter, c: Pos2, color: Color32, under: Color32) {
     let stroke = Stroke::new(1.3, color);
     for (y, knob_x) in [(-3.0, 2.5), (3.0, -2.5)] {
         painter.line_segment([c + vec2(-6.0, y), c + vec2(6.0, y)], stroke);
@@ -762,14 +769,14 @@ mod tests {
     }
 
     #[test]
-    fn gear_opens_settings() {
-        let at = gear_rect(header_rect(PANEL)).center();
+    fn settings_button_opens_settings() {
+        let at = settings_rect(header_rect(PANEL)).center();
         assert_eq!(click(&existing(2), at), Some(Action::OpenSettings));
     }
 
     #[test]
-    fn clear_link_left_of_the_gear_clears() {
-        let at = gear_rect(header_rect(PANEL)).left_center() - vec2(20.0, 0.0);
+    fn clear_link_left_of_the_settings_button_clears() {
+        let at = settings_rect(header_rect(PANEL)).left_center() - vec2(20.0, 0.0);
         assert_eq!(click(&existing(2), at), Some(Action::Clear));
     }
 
@@ -917,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    fn a_long_header_keeps_clear_and_the_gear_clickable() {
+    fn a_long_header_keeps_clear_and_the_settings_button_clickable() {
         // 999 items in Russian: the counter and the Ctrl hint are the longest they get.
         let many: Vec<ShelfItem> = (0..999)
             .map(|i| ShelfItem {
@@ -934,10 +941,10 @@ mod tests {
             run(vec![button(at, true)]);
             run(vec![button(at, false)])
         };
-        let gear = gear_rect(header_rect(PANEL));
-        assert_eq!(click_ru(gear.center()), Some(Action::OpenSettings));
+        let settings = settings_rect(header_rect(PANEL));
+        assert_eq!(click_ru(settings.center()), Some(Action::OpenSettings));
         assert_eq!(
-            click_ru(gear.left_center() - vec2(20.0, 0.0)),
+            click_ru(settings.left_center() - vec2(20.0, 0.0)),
             Some(Action::Clear)
         );
     }
@@ -1107,9 +1114,9 @@ mod tests {
     /// Circles drawn in the settings button, with the pointer on it or away.
     fn settings_knobs(dark: bool, hovered: bool) -> (Palette, Vec<egui::epaint::CircleShape>) {
         let p = palette(dark, [0x74, 0x7D, 0x89]);
-        let gear = gear_rect(header_rect(PANEL));
+        let settings = settings_rect(header_rect(PANEL));
         let at = if hovered {
-            gear.center()
+            settings.center()
         } else {
             pos2(-50.0, -50.0)
         };
@@ -1130,7 +1137,7 @@ mod tests {
         let knobs = shapes
             .into_iter()
             .filter_map(|c| match c.shape {
-                egui::Shape::Circle(k) if gear.contains(k.center) => Some(k),
+                egui::Shape::Circle(k) if settings.contains(k.center) => Some(k),
                 _ => None,
             })
             .collect();
@@ -1142,7 +1149,7 @@ mod tests {
         for dark in [false, true] {
             for hovered in [false, true] {
                 let (p, knobs) = settings_knobs(dark, hovered);
-                let c = gear_rect(header_rect(PANEL)).center();
+                let c = settings_rect(header_rect(PANEL)).center();
                 let centers: Vec<_> = knobs.iter().map(|k| k.center - c).collect();
                 assert_eq!(centers, [vec2(2.5, -3.0), vec2(-2.5, 3.0)]);
                 let under = if hovered { p.hover } else { p.bg };
