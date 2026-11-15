@@ -6,6 +6,8 @@ use shelve_platform::SystemLook;
 
 /// Lowest contrast against the background at which the accent still reads (WCAG, non-text).
 const MIN_ACCENT_CONTRAST: f32 = 3.0;
+/// The same for text in the accent (WCAG, normal text).
+const MIN_TEXT_CONTRAST: f32 = 4.5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Palette {
@@ -18,6 +20,8 @@ pub struct Palette {
     pub accent: Color32,
     /// Light wash of the accent, for highlighted rows.
     pub accent_bg: Color32,
+    /// The accent for text (links, text buttons): nudged further, until it reads as text.
+    pub text_accent: Color32,
     pub shadow: Color32,
 }
 
@@ -43,10 +47,14 @@ pub fn palette(dark: bool, accent: [u8; 3]) -> Palette {
         )
     };
     let system = Color32::from_rgb(accent[0], accent[1], accent[2]);
-    let accent = (0..=10)
-        .map(|step| mix(system, text, step as f32 / 10.0))
-        .find(|&c| contrast(c, bg) >= MIN_ACCENT_CONTRAST)
-        .unwrap_or(text);
+    let accent = towards(system, text, &[bg], MIN_ACCENT_CONTRAST);
+    // Text in the accent sits on the shelf and on the settings window behind the cards.
+    let text_accent = towards(
+        accent,
+        text,
+        &[bg, crate::widgets::window_fill(dark)],
+        MIN_TEXT_CONTRAST,
+    );
     Palette {
         bg,
         border,
@@ -55,8 +63,17 @@ pub fn palette(dark: bool, accent: [u8; 3]) -> Palette {
         hover,
         accent,
         accent_bg: mix(bg, accent, 0.15),
+        text_accent,
         shadow: Color32::from_black_alpha(shadow_alpha),
     }
+}
+
+/// The first step from `from` to `text` that stands out from every one of `bgs` by `min`.
+fn towards(from: Color32, text: Color32, bgs: &[Color32], min: f32) -> Color32 {
+    (0..=10)
+        .map(|step| mix(from, text, step as f32 / 10.0))
+        .find(|&c| bgs.iter().all(|&bg| contrast(c, bg) >= min))
+        .unwrap_or(text)
 }
 
 /// `t` = 0 gives `a`, 1 gives `b`. Opaque colours only.
@@ -97,7 +114,7 @@ pub fn apply(ctx: &egui::Context, look: SystemLook) -> Palette {
     v.window_shadow.color = p.shadow;
     v.popup_shadow.color = p.shadow;
     v.weak_text_color = Some(p.text_weak);
-    v.hyperlink_color = p.accent;
+    v.hyperlink_color = p.text_accent;
     v.selection.bg_fill = p.accent_bg;
     v.selection.stroke.color = p.accent;
     v.widgets.noninteractive.fg_stroke.color = p.text;
@@ -203,6 +220,38 @@ mod tests {
             let p = palette(dark, [bg.r(), bg.g(), bg.b()]);
             assert!(contrast(p.accent, p.bg) >= 3.0);
         }
+    }
+
+    #[test]
+    fn text_accent_reads_as_text_on_the_shelf_and_the_settings_window() {
+        let accents = [
+            WIN_BLUE,
+            [0x00, 0x20, 0x60],
+            [0xFF, 0xF1, 0x00],
+            [0x4C, 0x55, 0x60],
+        ];
+        for dark in [false, true] {
+            for accent in accents {
+                let p = palette(dark, accent);
+                for bg in [p.bg, crate::widgets::window_fill(dark)] {
+                    assert!(contrast(p.text_accent, bg) >= 4.5, "{accent:?} dark={dark}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn grey_blue_accent_on_dark_theme_gets_a_lighter_text_accent() {
+        // The owner's accent: as an icon it stays, as text it moves towards white.
+        let p = palette(true, [0x4C, 0x55, 0x60]);
+        assert!(contrast(p.accent, p.bg) < 4.5);
+        assert_ne!(p.text_accent, p.accent);
+    }
+
+    #[test]
+    fn text_accent_is_the_accent_when_that_already_reads_as_text() {
+        let p = palette(false, WIN_BLUE);
+        assert_eq!(p.text_accent, p.accent);
     }
 
     #[test]

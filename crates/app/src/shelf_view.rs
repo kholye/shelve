@@ -202,7 +202,7 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
 
     let label = ui
         .painter()
-        .layout_no_wrap(t.clear.to_owned(), small, p.accent);
+        .layout_no_wrap(t.clear.to_owned(), small, p.text_accent);
     let clear = Rect::from_min_max(
         pos2(gear.left() - 2.0 - label.size().x - 16.0, gear.top()),
         pos2(gear.left() - 2.0, gear.bottom()),
@@ -213,7 +213,7 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
         ui.painter().rect_filled(clear, 4.0, p.hover);
     }
     ui.painter()
-        .galley(clear.center() - label.size() / 2.0, label, p.accent);
+        .galley(clear.center() - label.size() / 2.0, label, p.text_accent);
 
     let line = header_line(ui, rect, count, t, clear.left(), p.text_weak);
     // The counter line is the handle that drags the whole shelf out. Click sense too, so

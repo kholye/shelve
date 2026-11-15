@@ -35,7 +35,7 @@ Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off 
 - The shelf hides by itself once the mouse buttons are up, the cursor is off the shelf, and a second and a half has passed. A shelf opened with the hotkey or from the tray waits until the cursor has been on it at least once, so it does not hide while you move the mouse over to it.
 - The shelf starts empty every time Shelve is started.
 
-The shelf is light or dark like Windows and uses the Windows accent colour. If animation effects are turned off in Windows, nothing on the shelf is animated.
+The shelf is light or dark like Windows and uses the Windows accent colour. Text in the accent, such as "Clear" and "Project page", is made lighter in the dark theme (darker in the light one) when the accent alone would be hard to read. If animation effects are turned off in Windows, nothing on the shelf is animated.
 
 ## Settings
 
