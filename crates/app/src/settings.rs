@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use shelve_core::{Config, Lang, Release};
@@ -39,6 +40,8 @@ struct State {
     /// The settings are in shelve.json next to the exe.
     portable: bool,
     portable_error: Option<String>,
+    /// The height last asked of Windows, and when: see `scroll_bars`.
+    asked: (f32, Instant),
     pending: Changes,
     /// Bring the window forward once it exists (also when reopened while behind others).
     want_focus: bool,
@@ -67,6 +70,7 @@ impl Settings {
             autostart_error: None,
             portable,
             portable_error: None,
+            asked: (0.0, Instant::now()),
             pending: Changes::default(),
             want_focus: false,
             palette: crate::theme::palette(false, [0x0F, 0x6C, 0xBD]),
@@ -85,6 +89,8 @@ impl Settings {
             s.cfg = cfg.clone();
             s.portable = portable;
             s.portable_error = None;
+            // A new window starts small too.
+            s.asked = (0.0, Instant::now());
             s.capturing = false;
             s.confirm = None;
             s.hotkey_error = None;
@@ -148,11 +154,22 @@ impl Settings {
             let frame = egui::Frame::new()
                 .fill(window_fill(ui.visuals().dark_mode))
                 .inner_margin(MARGIN);
+            let wanted = window_height(&s);
+            if s.asked.0 != wanted {
+                s.asked = (wanted, Instant::now());
+            }
+            let actual = ui.ctx().content_rect().height();
+            let bars = scroll_bars(actual, wanted, s.asked.1.elapsed());
+            if bars == egui::scroll_area::ScrollBarVisibility::AlwaysHidden {
+                // Where the window never grows, the bar comes once the wait is over.
+                ui.ctx().request_repaint_after(GROW_TIME);
+            }
             egui::CentralPanel::default().frame(frame).show(ui, |ui| {
                 // A hotkey warning or an error adds lines; the window has a fixed
                 // size, so the rest must stay reachable instead of being cut off.
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
+                    .scroll_bar_visibility(bars)
                     .show(ui, |ui| contents(ui, &mut s));
             });
             // The shelf applies changes and stops showing this window in its own pass.
@@ -208,6 +225,26 @@ const MARGIN: egui::Margin = egui::Margin::symmetric(16, 8);
 const UPDATE_CARD_H: f32 = 72.0;
 /// The line under the greyed-out autostart switch.
 const AUTOSTART_HINT_H: f32 = 18.0;
+
+/// How long Windows may take to give the window the height it asked for.
+const GROW_TIME: Duration = Duration::from_millis(500);
+
+/// The window asks for `wanted` points of height and has `actual`. While it is still
+/// smaller, the contents already fill the new height: a bar would flash for a frame.
+/// Only for a moment after the height was asked: on a screen too short for the window,
+/// Windows never gives it, and there the bar is needed.
+fn scroll_bars(
+    actual: f32,
+    wanted: f32,
+    since_asked: Duration,
+) -> egui::scroll_area::ScrollBarVisibility {
+    use egui::scroll_area::ScrollBarVisibility::{AlwaysHidden, VisibleWhenNeeded};
+    if actual + 1.0 < wanted && since_asked < GROW_TIME {
+        AlwaysHidden
+    } else {
+        VisibleWhenNeeded
+    }
+}
 
 /// Tall enough that nothing needs scrolling: taller while the new version card is on top
 /// and while the autostart switch has its "not in portable mode" line.
@@ -305,6 +342,7 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         autostart_error,
         portable,
         portable_error,
+        asked: _,
         pending: changes,
         want_focus: _,
         palette,
@@ -591,6 +629,7 @@ pub fn breaks_typing(key: egui::Key, mods: egui::Modifiers) -> bool {
 mod tests {
     use super::*;
     use egui::{Key, Modifiers};
+    use std::time::Duration;
 
     const CTRL_ALT: Modifiers = Modifiers {
         alt: true,
@@ -682,6 +721,29 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn no_scroll_bar_while_the_window_is_still_growing() {
+        // Bug: opening the window or flipping the portable switch flashed a scroll bar for
+        // a frame, before Windows had made the window as tall as asked.
+        use egui::scroll_area::ScrollBarVisibility::{AlwaysHidden, VisibleWhenNeeded};
+        let just = Duration::from_millis(30);
+        assert_eq!(scroll_bars(700.0, 738.0, just), AlwaysHidden);
+        assert_eq!(scroll_bars(738.0, 738.0, just), VisibleWhenNeeded);
+        // Rounding of a fractional DPI scale is not growing.
+        assert_eq!(scroll_bars(737.6, 738.0, just), VisibleWhenNeeded);
+        assert_eq!(scroll_bars(800.0, 738.0, just), VisibleWhenNeeded);
+    }
+
+    #[test]
+    fn a_screen_too_short_for_the_window_still_gets_its_scroll_bar() {
+        // Windows never makes the window as tall as asked there; scrolling must show.
+        use egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded;
+        assert_eq!(
+            scroll_bars(690.0, 738.0, Duration::from_secs(1)),
+            VisibleWhenNeeded
+        );
     }
 
     #[test]
