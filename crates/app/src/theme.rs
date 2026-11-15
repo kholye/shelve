@@ -48,11 +48,12 @@ pub fn palette(dark: bool, accent: [u8; 3]) -> Palette {
     };
     let system = Color32::from_rgb(accent[0], accent[1], accent[2]);
     let accent = towards(system, text, &[bg], MIN_ACCENT_CONTRAST);
-    // Text in the accent sits on the shelf and on the settings window behind the cards.
+    // Text in the accent sits on the shelf, on a button's hover fill and on the
+    // settings window behind the cards.
     let text_accent = towards(
         accent,
         text,
-        &[bg, crate::widgets::window_fill(dark)],
+        &[bg, hover, crate::widgets::window_fill(dark)],
         MIN_TEXT_CONTRAST,
     );
     Palette {
@@ -233,7 +234,7 @@ mod tests {
         for dark in [false, true] {
             for accent in accents {
                 let p = palette(dark, accent);
-                for bg in [p.bg, crate::widgets::window_fill(dark)] {
+                for bg in [p.bg, p.hover, crate::widgets::window_fill(dark)] {
                     assert!(contrast(p.text_accent, bg) >= 4.5, "{accent:?} dark={dark}");
                 }
             }
@@ -250,7 +251,8 @@ mod tests {
 
     #[test]
     fn text_accent_is_the_accent_when_that_already_reads_as_text() {
-        let p = palette(false, WIN_BLUE);
+        // A darker Windows blue: 4.5:1 even on the light hover fill. (#0F6CBD gets 4.47 there.)
+        let p = palette(false, [0x00, 0x5F, 0xB8]);
         assert_eq!(p.text_accent, p.accent);
     }
 
