@@ -20,7 +20,7 @@ Settings are kept in `%APPDATA%\shelve\config.json`. To remove Shelve, turn off 
 
 ## Use
 
-![The shelf with seven items: two picked rows are tinted, a long name is shortened in the middle, and the row under the mouse shows its folder path](docs/shelf.png)
+![The shelf with seven items: two picked rows have an accent stripe at the left, a long name is shortened in the middle, and the row under the mouse shows its folder path](docs/shelf.png)
 
 - **Put a file on it.** Drag a file or a folder to the screen edge (the right one by default) and drop it on the shelf when it slides out. On an empty shelf the frame under the shelf drawing fills with the accent colour while the file is over it, and "Drop to add" turns from grey to the normal text colour. `Ctrl+Alt+D` or "Show/hide" in the tray menu opens the shelf without dragging anything. New rows go to the end; several files dropped at once line up as in Explorer, folders first, then by name ("scan_2" before "scan_10"), whichever one you grabbed. On a long shelf the list scrolls down to them. A name too long for its row is shortened in the middle, so its end with the extension stays in sight: "Lease agreement (s…ned).pdf". Rest the mouse on the row and its second line shows the whole folder path instead of the folder name; a long path loses folders in the middle and keeps its start and the last folder: "C:\Users\admin\…\design\Five". Nothing covers the rows next to it.
 - **Take a file off it.** Drag a row into a folder or onto the desktop with the left mouse button and the file moves there. Its row leaves the shelf once Explorer has finished moving it: usually at once, for a big file going to another drive when the copying is done. Shelve itself never deletes anything.
