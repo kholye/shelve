@@ -132,15 +132,11 @@ impl Settings {
         }
         let (title, height) = {
             let s = self.lock();
-            // Taller while the new version card is on top, so nothing needs scrolling.
-            let card = if shows_update(&s) { UPDATE_CARD_H } else { 0.0 };
-            let hint = if s.portable { AUTOSTART_HINT_H } else { 0.0 };
-            let height = 645.0 + PORTABLE_CARD_H + hint + card;
-            (s.cfg.lang.text().settings_title, height)
+            (s.cfg.lang.text().settings_title, window_height(&s))
         };
         let builder = egui::ViewportBuilder::default()
             .with_title(title)
-            .with_inner_size([420.0, height])
+            .with_inner_size([WINDOW_W, height])
             .with_resizable(false)
             .with_icon(crate::window::app_icon());
         let state = self.clone();
@@ -151,7 +147,7 @@ impl Settings {
             }
             let frame = egui::Frame::new()
                 .fill(window_fill(ui.visuals().dark_mode))
-                .inner_margin(egui::Margin::symmetric(16, 8));
+                .inner_margin(MARGIN);
             egui::CentralPanel::default().frame(frame).show(ui, |ui| {
                 // A hotkey warning or an error adds lines; the window has a fixed
                 // size, so the rest must stay reachable instead of being cut off.
@@ -206,13 +202,20 @@ fn key_cap(ui: &mut egui::Ui, p: &Palette, name: &str) {
         .show(ui, |ui| ui.label(egui::RichText::new(name).size(12.0)));
 }
 
+const WINDOW_W: f32 = 420.0;
+const MARGIN: egui::Margin = egui::Margin::symmetric(16, 8);
 /// Height the new version card adds to the window, spacing included.
 const UPDATE_CARD_H: f32 = 72.0;
-
-/// Height the "keep settings next to the program" card adds, spacing included.
-const PORTABLE_CARD_H: f32 = 64.0;
 /// The line under the greyed-out autostart switch.
 const AUTOSTART_HINT_H: f32 = 18.0;
+
+/// Tall enough that nothing needs scrolling: taller while the new version card is on top
+/// and while the autostart switch has its "not in portable mode" line.
+fn window_height(s: &State) -> f32 {
+    let card = if shows_update(s) { UPDATE_CARD_H } else { 0.0 };
+    let hint = if s.portable { AUTOSTART_HINT_H } else { 0.0 };
+    720.0 + hint + card
+}
 
 /// The card is hidden at once when the switch goes off, before the checker hears of it.
 fn shows_update(s: &State) -> bool {
@@ -622,6 +625,63 @@ mod tests {
         assert!(!settings.set_inputs(palette, Some(release)));
         settings.lock().cfg.check_updates = false;
         assert!(!shows_update(&settings.lock()), "switched off: no card");
+    }
+
+    /// Height the window's contents take, laid out headless as in `show`.
+    fn contents_height(s: &mut State) -> f32 {
+        let ctx = egui::Context::default();
+        crate::theme::install_font(&ctx);
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(WINDOW_W, 3000.0),
+            )),
+            ..Default::default()
+        };
+        let mut height = 0.0;
+        // The font takes effect from the second pass on.
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(input(), |ui| {
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::new().inner_margin(MARGIN))
+                    .show(ui, |ui| {
+                        let used = ui.vertical(|ui| contents(ui, s)).response.rect;
+                        height = used.height() + MARGIN.sum().y;
+                    });
+            });
+            // No renderer takes the font atlas here.
+            out.textures_delta.clear();
+        }
+        height
+    }
+
+    #[test]
+    fn everything_fits_without_scrolling() {
+        // Bug: the portable switch's two-line hint pushed the last line out of sight.
+        let release = Release {
+            version: "9.0.0".into(),
+            url: "https://github.com/kholye/shelve/releases/tag/v9.0.0".into(),
+        };
+        for lang in Lang::ALL {
+            for portable in [false, true] {
+                for update in [None, Some(release.clone())] {
+                    let cfg = Config {
+                        lang,
+                        ..Config::default()
+                    };
+                    let settings = Settings::new(&cfg, portable);
+                    let mut s = settings.lock();
+                    s.update = update.clone();
+                    let need = contents_height(&mut s);
+                    let have = window_height(&s);
+                    assert!(
+                        need <= have,
+                        "{lang:?} portable={portable} update={}: needs {need}, has {have}",
+                        update.is_some()
+                    );
+                }
+            }
+        }
     }
 
     #[test]
