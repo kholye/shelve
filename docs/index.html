@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shelve</title>
+<meta name="description" content="A file shelf at the screen edge for Windows: park files while you drag them somewhere else.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Shelve">
+<meta property="og:title" content="Shelve">
+<meta property="og:description" content="A file shelf at the screen edge for Windows: park files while you drag them somewhere else.">
+<meta property="og:url" content="https://kholye.github.io/shelve/">
+<meta property="og:image" content="https://kholye.github.io/shelve/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Three files on the Shelve shelf at the right edge of the screen, next to an Explorer window">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+/* Layout: one narrow left-aligned column; the right edge of the page stands for the screen edge and carries the Shelve tab. */
+:root {
+  --ground: #EEF0F2;
+  --panel: #FFFFFF;
+  --ink: #1B1E23;
+  --ink-soft: #545B66;
+  --line: #D5D9DF;
+  --accent: #005FB8;
+  --accent-ink: #FFFFFF;
+  --desk: #4C4A48;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #1E2125; --panel: #2B2B2B; --ink: #F3F4F6; --ink-soft: #AEB4BC;
+    --line: #3C4047; --accent: #6CB0F5; --accent-ink: #0F1720; --desk: #4C4A48;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--ground); }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font: 17px/1.6 var(--font);
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 720px; margin: 0 auto; padding-block: 64px 48px; display: flex; flex-direction: column; gap: 56px; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+header { display: flex; flex-direction: column; gap: 14px; }
+h1 { font: 600 clamp(56px, 12vw, 104px)/0.95 var(--font-display); letter-spacing: -0.035em; margin: 0; }
+.lede { font-size: 21px; line-height: 1.45; margin: 0; max-width: 34ch; text-wrap: balance; }
+.facts { margin: 0; color: var(--ink-soft); font-size: 15px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 10px; }
+.download {
+  display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 6px;
+  background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 600; font-size: 17px;
+}
+.download:hover { filter: brightness(1.08); }
+.download svg { width: 18px; height: 18px; }
+.secondary { font-size: 15px; }
+
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.desk { background: var(--desk); border-radius: 8px; overflow: hidden; }
+.desk img { display: block; width: 100%; height: auto; }
+figcaption { font-size: 14px; color: var(--ink-soft); }
+
+h2 { font: 600 26px/1.25 var(--font-display); letter-spacing: -0.01em; margin: 0 0 16px; }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: baseline; }
+ol.steps li::before {
+  content: counter(s); font: 600 15px/1 var(--font-display); color: var(--accent);
+  border: 1.5px solid var(--accent); border-radius: 50%; width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+p { margin: 0 0 12px; }
+.more { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: start; }
+.more ul { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.more img { width: 300px; max-width: 100%; height: auto; display: block; border-radius: 10px; }
+kbd { font: inherit; font-size: 0.92em; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+.note { font-size: 15px; color: var(--ink-soft); border-left: 3px solid var(--line); padding-left: 14px; }
+
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font-size: 14px; color: var(--ink-soft); border-top: 1px solid var(--line); padding-top: 18px; }
+.lang { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 5px; padding: 3px 10px; font: 14px var(--font); cursor: pointer; }
+
+/* the Shelve tab at the page's right edge */
+.tab {
+  position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 56px; background: var(--panel); border: 1px solid var(--line); border-right: 0;
+  border-radius: 7px 0 0 7px; display: flex; align-items: center; justify-content: center;
+}
+.tab svg { width: 8px; height: 14px; }
+
+html:not([lang="en"]) [data-lang="en"], html:not([lang="ru"]) [data-lang="ru"] { display: none !important; }
+
+@media (max-width: 640px) {
+  main { padding-block: 40px 32px; gap: 44px; }
+  .more { grid-template-columns: 1fr; }
+  .lede { font-size: 19px; }
+  .tab { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="tab" aria-hidden="true"><svg viewBox="0 0 8 14"><path d="M6 1.5 2 7l4 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-soft)"/></svg></div>
+<main>
+  <header>
+    <h1>Shelve</h1>
+    <p class="lede" data-lang="en">A file shelf at the screen edge for Windows: park files while you drag them somewhere else.</p>
+    <p class="lede" data-lang="ru">Полка для файлов у края экрана Windows: положите файл, пока ищете, куда его перетащить.</p>
+    <p class="facts" data-lang="en">Windows 10 and 11. Free and open source. One file, no installer, no administrator rights.</p>
+    <p class="facts" data-lang="ru">Windows 10 и 11. Бесплатно, с открытым кодом. Один файл, без установщика и прав администратора.</p>
+    <div class="actions">
+      <a class="download" href="https://github.com/kholye/shelve/releases/latest/download/shelve.exe">
+        <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2v10M4.5 8 9 12.5 13.5 8M3 15.5h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-lang="en">Download shelve.exe</span><span data-lang="ru">Скачать shelve.exe</span>
+      </a>
+      <a class="secondary" href="https://github.com/kholye/shelve/releases/latest" data-lang="en">What's new</a>
+      <a class="secondary" href="https://github.com/kholye/shelve/releases/latest" data-lang="ru">Что нового</a>
+      <a class="secondary" href="https://github.com/kholye/shelve" data-lang="en">Source code</a>
+      <a class="secondary" href="https://github.com/kholye/shelve" data-lang="ru">Исходный код</a>
+    </div>
+  </header>
+
+  <figure>
+    <div class="desk"><img src="demo.gif" width="990" height="340" alt="Three files are dragged to the screen edge and dropped on the shelf; two of them are picked and moved into a folder together, and the shelf hides behind a tab at the edge"></div>
+    <figcaption data-lang="en">Three files go to the shelf, two of them go on into a folder.</figcaption>
+    <figcaption data-lang="ru">Три файла ложатся на полку, два из них уезжают дальше в папку.</figcaption>
+  </figure>
+
+  <section>
+    <h2 data-lang="en">How it works</h2>
+    <h2 data-lang="ru">Как это работает</h2>
+    <ol class="steps" data-lang="en">
+      <li>Start dragging a file and take it to the edge of the screen. A small shelf slides out.</li>
+      <li>Drop the file on the shelf and let go of the mouse.</li>
+      <li>Open the folder or program where the file belongs and drag it there from the shelf.</li>
+    </ol>
+    <ol class="steps" data-lang="ru">
+      <li>Начните тащить файл и доведите его до края экрана. Оттуда выедет небольшая полка.</li>
+      <li>Бросьте файл на полку и отпустите мышь.</li>
+      <li>Откройте папку или программу, куда нужен файл, и перетащите его туда с полки.</li>
+    </ol>
+  </section>
+
+  <section class="more">
+    <div>
+      <h2 data-lang="en">Good to know</h2>
+      <h2 data-lang="ru">Полезно знать</h2>
+      <ul data-lang="en">
+        <li>The shelf keeps only links. Nothing is copied or moved until you drag a file off it. Hold Ctrl when you let go to copy instead of move.</li>
+        <li>Pick several rows as in Explorer and drag them off together.</li>
+        <li><kbd>Ctrl+Alt+D</kbd> or the tray icon opens the shelf without dragging.</li>
+        <li>Light or dark, following Windows. English or Russian, chosen in the settings.</li>
+      </ul>
+      <ul data-lang="ru">
+        <li>Полка хранит только ссылки. Ничего не копируется и не переносится, пока вы сами не перетащите файл с полки. Держите Ctrl, когда отпускаете, и будет копия.</li>
+        <li>Выделите несколько строк, как в Проводнике, и перетащите их разом.</li>
+        <li><kbd>Ctrl+Alt+D</kbd> или значок у часов открывает полку без перетаскивания.</li>
+        <li>Светлая или тёмная вслед за Windows. Русский язык включается в настройках.</li>
+      </ul>
+    </div>
+    <img src="shelf.png" width="308" height="388" alt="The shelf with seven files: two picked rows have a stripe at the left, and the row under the mouse shows its folder path">
+  </section>
+
+  <p class="note" data-lang="en">The file is not signed, so on the first run Windows SmartScreen warns: click "More info", then "Run anyway".</p>
+  <p class="note" data-lang="ru">Файл не подписан, поэтому при первом запуске Windows SmartScreen предупредит: нажмите «Подробнее», затем «Выполнить в любом случае».</p>
+
+  <footer>
+    <span data-lang="en">MIT or Apache 2.0 licence. <a href="https://github.com/kholye/shelve#readme">Full description</a></span>
+    <span data-lang="ru">Лицензия MIT или Apache 2.0. <a href="https://github.com/kholye/shelve/blob/main/README.ru.md">Подробное описание</a></span>
+    <button class="lang" type="button" id="lang-switch"><span data-lang="en">По-русски</span><span data-lang="ru">In English</span></button>
+  </footer>
+</main>
+<script>
+(function () {
+  var root = document.documentElement, saved = null;
+  try { saved = localStorage.getItem('shelve-lang'); } catch (e) {}
+  var lang = saved || ((navigator.language || '').toLowerCase().indexOf('ru') === 0 ? 'ru' : 'en');
+  root.lang = lang;
+  if (lang === 'ru') document.title = 'Shelve — полка для файлов';
+  document.getElementById('lang-switch').addEventListener('click', function () {
+    root.lang = root.lang === 'ru' ? 'en' : 'ru';
+    document.title = root.lang === 'ru' ? 'Shelve — полка для файлов' : 'Shelve';
+    try { localStorage.setItem('shelve-lang', root.lang); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
