@@ -195,10 +195,11 @@ fn header(ui: &mut egui::Ui, rect: Rect, count: &str, p: &Palette, t: &Text) -> 
         .interact(gear, ui.scope_id().with("settings"), Sense::click())
         .on_hover_text(t.settings);
     gear_resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, t.settings));
+    let under = if gear_resp.hovered() { p.hover } else { p.bg };
     if gear_resp.hovered() {
-        ui.painter().rect_filled(gear, 4.0, p.hover);
+        ui.painter().rect_filled(gear, 4.0, under);
     }
-    paint_gear(ui.painter(), gear.center(), p.text_weak);
+    paint_gear(ui.painter(), gear.center(), p.text_weak, under);
 
     let label = ui
         .painter()
@@ -503,14 +504,13 @@ fn paint_shelf_glyph(painter: &egui::Painter, rect: Rect, color: Color32) {
     ));
 }
 
-/// Gear: a ring and eight short spokes, in a 16-point box around `c`.
-fn paint_gear(painter: &egui::Painter, c: Pos2, color: Color32) {
+/// Settings: two slider lines with a knob each, in a 16-point box around `c`. The knobs
+/// are filled with `under`, the fill behind the button, so they hide the line.
+fn paint_gear(painter: &egui::Painter, c: Pos2, color: Color32, under: Color32) {
     let stroke = Stroke::new(1.3, color);
-    painter.circle_stroke(c, 2.2, stroke);
-    for i in 0..8 {
-        let (sin, cos) = (i as f32 * std::f32::consts::FRAC_PI_4).sin_cos();
-        let dir = vec2(cos, sin);
-        painter.line_segment([c + dir * 4.5, c + dir * 6.5], stroke);
+    for (y, knob_x) in [(-3.0, 2.5), (3.0, -2.5)] {
+        painter.line_segment([c + vec2(-6.0, y), c + vec2(6.0, y)], stroke);
+        painter.circle(c + vec2(knob_x, y), 2.0, under, stroke);
     }
 }
 
@@ -1101,6 +1101,57 @@ mod tests {
             assert_eq!(stripe.size(), vec2(3.0, 16.0));
             assert_eq!(stripe.left(), body.left());
             assert_eq!(stripe.center().y, body.center().y);
+        }
+    }
+
+    /// Circles drawn in the settings button, with the pointer on it or away.
+    fn settings_knobs(dark: bool, hovered: bool) -> (Palette, Vec<egui::epaint::CircleShape>) {
+        let p = palette(dark, [0x74, 0x7D, 0x89]);
+        let gear = gear_rect(header_rect(PANEL));
+        let at = if hovered {
+            gear.center()
+        } else {
+            pos2(-50.0, -50.0)
+        };
+        let ctx = egui::Context::default();
+        let mut shapes = vec![];
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(PANEL),
+                events: vec![egui::Event::PointerMoved(at)],
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                header(ui, header_rect(PANEL), "2", &p, Lang::En.text());
+            });
+            out.textures_delta.clear();
+            shapes = out.shapes;
+        }
+        let knobs = shapes
+            .into_iter()
+            .filter_map(|c| match c.shape {
+                egui::Shape::Circle(k) if gear.contains(k.center) => Some(k),
+                _ => None,
+            })
+            .collect();
+        (p, knobs)
+    }
+
+    #[test]
+    fn settings_button_is_two_sliders_whose_knobs_take_the_fill_under_them() {
+        for dark in [false, true] {
+            for hovered in [false, true] {
+                let (p, knobs) = settings_knobs(dark, hovered);
+                let c = gear_rect(header_rect(PANEL)).center();
+                let centers: Vec<_> = knobs.iter().map(|k| k.center - c).collect();
+                assert_eq!(centers, [vec2(2.5, -3.0), vec2(-2.5, 3.0)]);
+                let under = if hovered { p.hover } else { p.bg };
+                for k in &knobs {
+                    assert_eq!(k.radius, 2.0);
+                    assert_eq!(k.fill, under);
+                    assert_eq!(k.stroke, Stroke::new(1.3, p.text_weak));
+                }
+            }
         }
     }
 

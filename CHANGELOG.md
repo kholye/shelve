@@ -7,6 +7,7 @@
 - A picked row no longer looks like the row under the mouse: it has a short accent stripe at the left, as in Windows 11 lists. The mouse on a picked row now highlights it too, and the stripe stays.
 - A file carried over an empty shelf is easier to notice: the frame under the shelf drawing fills with the accent colour, the drawing turns the background colour, and "Drop to add" is shown in the normal text colour instead of grey.
 - The tab of a hidden shelf shows on dark wallpaper: its arrow is larger and twice as thick, drawn in the grey of secondary text instead of the accent, and in the dark theme its border is lighter. Under the mouse it still fills with the accent.
+- The settings button in the shelf header is drawn as two sliders instead of a gear that looked like a sun. It keeps its grey colour and its highlight under the mouse.
 
 ## 0.4.0
 
