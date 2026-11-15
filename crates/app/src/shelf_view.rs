@@ -263,7 +263,7 @@ struct RowLook {
     interactive: bool,
     /// The file is gone: greyed and struck through, a click removes the row.
     missing: bool,
-    /// Picked with a click: washed with the accent.
+    /// Picked with a click: washed with the accent, with a stripe at the left.
     selected: bool,
 }
 
@@ -295,9 +295,13 @@ fn row(
         let wash = p.accent_bg.gamma_multiply(look.flash * look.height);
         painter.rect_filled(body, ROW_RADIUS, wash);
     }
-    if under_pointer && !look.selected {
-        // Opaque: it would hide the selection wash.
+    if under_pointer {
         painter.rect_filled(body, ROW_RADIUS, p.hover);
+    }
+    if look.selected {
+        // As in Windows 11 lists: the stripe tells a selected row from a hovered one.
+        let stripe = Rect::from_min_size(pos2(body.left(), body.center().y - 8.0), vec2(3.0, 16.0));
+        painter.rect_filled(stripe, 1.5, fade(p.text_accent));
     }
 
     let icon_rect = Rect::from_center_size(
@@ -1025,6 +1029,57 @@ mod tests {
         });
         assert_eq!(tips, 0);
     }
+
+    /// Filled rects drawn for one selected row with the pointer on it.
+    fn selected_row_fills(dark: bool) -> (Palette, Vec<(Rect, Color32)>) {
+        let p = palette(dark, [0x74, 0x7D, 0x89]);
+        let item = existing(1).remove(0);
+        let look = RowLook {
+            height: 1.0,
+            flash: 0.0,
+            interactive: true,
+            missing: false,
+            selected: true,
+        };
+        let at = row_rect(0).left_center() + vec2(60.0, 0.0);
+        let ctx = egui::Context::default();
+        let mut shapes = vec![];
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(PANEL),
+                events: vec![egui::Event::PointerMoved(at)],
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                row(ui, row_rect(0), &item, None, &p, look, Lang::En.text());
+            });
+            out.textures_delta.clear();
+            shapes = out.shapes;
+        }
+        let fills = shapes
+            .into_iter()
+            .filter_map(|c| match c.shape {
+                egui::Shape::Rect(r) => Some((r.rect, r.fill)),
+                _ => None,
+            })
+            .collect();
+        (p, fills)
+    }
+
+    #[test]
+    fn a_selected_row_under_the_mouse_shows_the_hover_and_a_stripe_at_its_left() {
+        for dark in [false, true] {
+            let (p, fills) = selected_row_fills(dark);
+            let body = row_body(row_rect(0));
+            assert!(fills.iter().any(|&(r, c)| r == body && c == p.hover));
+            let stripe = fills.iter().find(|&&(_, c)| c == p.text_accent);
+            let (stripe, _) = *stripe.expect("no stripe");
+            assert_eq!(stripe.size(), vec2(3.0, 16.0));
+            assert_eq!(stripe.left(), body.left());
+            assert_eq!(stripe.center().y, body.center().y);
+        }
+    }
+
     #[test]
     fn hundreds_of_rows_with_a_file_over_them_draw() {
         let many: Vec<ShelfItem> = (0..500)
