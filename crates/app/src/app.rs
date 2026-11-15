@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use eframe::egui;
 use shelve_core::{
-    default_config_path, Command, Config, Edge, ItemKind, ScreenRect, Selection, Shelf, ShelfItem,
+    Command, Config, ConfigPlace, Edge, ItemKind, ScreenRect, Selection, Shelf, ShelfItem,
 };
 
 use crate::auto_show::AutoShowInput;
@@ -29,6 +29,8 @@ const SLIDE_S: f32 = ANIM_S;
 pub struct ShelfApp {
     pub shelf: Shelf,
     pub cfg: Config,
+    /// Where `cfg` is saved: %APPDATA%, or next to the exe when portable.
+    pub place: ConfigPlace,
     pub events: Receiver<PlatformEvent>,
     /// Kept so tray/hotkey and the hook can be restarted with fresh settings.
     pub platform_tx: Sender<PlatformEvent>,
@@ -226,8 +228,15 @@ impl ShelfApp {
     }
 
     fn apply(&mut self, changes: Changes) {
-        let mut autostart_error = None;
-        if let Err(e) = self.cfg.save(&default_config_path()) {
+        let (mut autostart_error, mut portable_error) = (None, None);
+        let want_portable = self.settings.portable();
+        if changes.portable && want_portable != self.place.portable {
+            match ConfigPlace::switch_current(&self.cfg, want_portable) {
+                Ok(place) => self.place = place,
+                Err(e) => portable_error = Some(self.cfg.lang.portable_failed(&e.to_string())),
+            }
+        }
+        if let Err(e) = self.cfg.save(&self.place.path) {
             println!("config save failed: {e}");
         }
         if changes.hook {
@@ -245,13 +254,18 @@ impl ShelfApp {
         if changes.updates {
             self.updates.set_enabled(self.cfg.check_updates);
         }
-        if changes.autostart {
-            autostart_error = shelve_platform::set_autostart(self.cfg.autostart)
+        if changes.autostart || changes.portable {
+            // Going portable takes the Run entry away; leaving it puts back the saved choice.
+            autostart_error = shelve_platform::set_autostart(self.place.autostart(&self.cfg))
                 .err()
                 .map(|e| self.cfg.lang.autostart_failed(&e.to_string()));
         }
-        self.settings
-            .set_feedback(self.hotkey_status(), autostart_error);
+        self.settings.set_feedback(
+            self.hotkey_status(),
+            autostart_error,
+            self.place.portable,
+            portable_error,
+        );
         self.sync_tab(); // edge or alignment may have moved the tab too
         if self.visible {
             // Edge or alignment may have moved it. On the monitor it is on: `set_visible`
@@ -306,7 +320,10 @@ impl eframe::App for ShelfApp {
                 PlatformEvent::EdgeShow => self.set_visible(true),
                 PlatformEvent::EdgeHide => self.set_visible(false),
                 PlatformEvent::TrayClear => self.shelf.clear(),
-                PlatformEvent::TraySettings => self.settings.open(&self.cfg, self.hotkey_status()),
+                PlatformEvent::TraySettings => {
+                    self.settings
+                        .open(&self.cfg, self.place.portable, self.hotkey_status())
+                }
                 PlatformEvent::TrayQuit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                 PlatformEvent::ThemeChanged => ctx.request_repaint(),
             }
@@ -513,7 +530,10 @@ impl ShelfApp {
                 self.shelf.remove(&path);
             }
             Some(Action::Clear) => self.shelf.clear(),
-            Some(Action::OpenSettings) => self.settings.open(&self.cfg, self.hotkey_status()),
+            Some(Action::OpenSettings) => {
+                self.settings
+                    .open(&self.cfg, self.place.portable, self.hotkey_status())
+            }
             Some(Action::DragOut(item, button)) => {
                 let items = self.selection.to_drag(self.shelf.items(), &item);
                 self.drag_out(ui, &items, button);

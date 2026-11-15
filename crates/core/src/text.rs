@@ -51,6 +51,10 @@ pub struct Text {
     /// Under the switch: how the shelf still opens with it off.
     pub auto_show_hint: &'static str,
     pub autostart: &'static str,
+    /// Under the greyed-out autostart switch.
+    pub autostart_portable: &'static str,
+    pub portable: &'static str,
+    pub portable_hint: &'static str,
     pub language: &'static str,
     pub version: &'static str,
     pub project_page: &'static str,
@@ -92,6 +96,9 @@ const EN: Text = Text {
     auto_show_hint:
         "When off, open the shelf with the hotkey, the tray icon or the tab at the screen edge",
     autostart: "Start with Windows",
+    autostart_portable: "Not available in portable mode",
+    portable: "Keep settings next to the program",
+    portable_hint: "In shelve.json beside shelve.exe. Nothing goes to AppData or the registry",
     language: "Language",
     version: "Shelve, version",
     project_page: "Project page",
@@ -133,6 +140,9 @@ const RU: Text = Text {
     auto_show_hint:
         "Если выключено, полку открывают горячей клавишей, значком в трее или язычком у края экрана",
     autostart: "Запускать вместе с Windows",
+    autostart_portable: "Недоступно в портативном режиме",
+    portable: "Хранить настройки рядом с программой",
+    portable_hint: "В файле shelve.json возле shelve.exe. В AppData и реестр ничего не пишется",
     language: "Язык",
     version: "Shelve, версия",
     project_page: "Страница проекта",
@@ -235,6 +245,13 @@ impl Lang {
         match self {
             Lang::En => format!("Could not change autostart: {why}"),
             Lang::Ru => format!("Не удалось изменить автозапуск: {why}"),
+        }
+    }
+
+    pub fn portable_failed(self, why: &str) -> String {
+        match self {
+            Lang::En => format!("Could not move the settings: {why}"),
+            Lang::Ru => format!("Не удалось перенести настройки: {why}"),
         }
     }
 

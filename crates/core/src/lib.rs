@@ -5,7 +5,7 @@ mod shelf;
 mod text;
 mod update;
 
-pub use config::{default_config_path, Align, Config, Edge};
+pub use config::{Align, Config, ConfigPlace, Edge, PORTABLE_FILE};
 pub use edge::{Command, EdgeEvent, EdgeTrigger, ScreenRect};
 pub use selection::Selection;
 pub use shelf::{availability, Availability, ItemKind, Shelf, ShelfItem};

@@ -20,14 +20,15 @@ use std::time::Instant;
 
 use eframe::egui;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use shelve_core::{default_config_path, Config, ScreenRect, Shelf};
+use shelve_core::{Config, ConfigPlace, ScreenRect, Shelf};
 
 use app::ShelfApp;
 use settings::Settings;
 
 fn main() -> eframe::Result {
     let _instance = shelve_platform::acquire_single_instance();
-    let cfg = Config::load(&default_config_path());
+    let place = ConfigPlace::current();
+    let cfg = Config::load(&place.path);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -105,13 +106,15 @@ fn main() -> eframe::Result {
             let mouse_hook = app::start_mouse_hook(&cfg, auto_show.clone());
             let platform = shelve_platform::start(&cfg, platform_tx.clone())?;
             println!("hotkey {}: {:?}", cfg.hotkey, platform.hotkey_status());
-            if cfg.autostart {
+            // Portable: the registry is never touched, so a flash drive leaves nothing.
+            if place.autostart(&cfg) {
                 // Points the Run entry at this exe, in case it was moved.
                 let _ = shelve_platform::set_autostart(true);
             }
             Ok(Box::new(ShelfApp {
                 shelf: Shelf::new(),
-                settings: Settings::new(&cfg),
+                settings: Settings::new(&cfg, place.portable),
+                place,
                 updates: update::UpdateCheck::start(cfg.check_updates, cc.egui_ctx.clone()),
                 cfg,
                 events,

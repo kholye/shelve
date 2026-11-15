@@ -20,6 +20,8 @@ pub struct Changes {
     pub autostart: bool,
     /// The update check was switched on or off.
     pub updates: bool,
+    /// "Keep settings next to the program" was switched: move the settings file.
+    pub portable: bool,
 }
 
 struct State {
@@ -34,6 +36,9 @@ struct State {
     hotkey_error: Option<String>,
     hotkey_status: Option<HotkeyStatus>,
     autostart_error: Option<String>,
+    /// The settings are in shelve.json next to the exe.
+    portable: bool,
+    portable_error: Option<String>,
     pending: Changes,
     /// Bring the window forward once it exists (also when reopened while behind others).
     want_focus: bool,
@@ -51,7 +56,7 @@ struct State {
 pub struct Settings(Arc<Mutex<State>>);
 
 impl Settings {
-    pub fn new(cfg: &Config) -> Self {
+    pub fn new(cfg: &Config, portable: bool) -> Self {
         Self(Arc::new(Mutex::new(State {
             open: false,
             cfg: cfg.clone(),
@@ -60,6 +65,8 @@ impl Settings {
             hotkey_error: None,
             hotkey_status: None,
             autostart_error: None,
+            portable,
+            portable_error: None,
             pending: Changes::default(),
             want_focus: false,
             palette: crate::theme::palette(false, [0x0F, 0x6C, 0xBD]),
@@ -72,10 +79,12 @@ impl Settings {
         self.0.lock().unwrap()
     }
 
-    pub fn open(&self, cfg: &Config, hotkey_status: Option<HotkeyStatus>) {
+    pub fn open(&self, cfg: &Config, portable: bool, hotkey_status: Option<HotkeyStatus>) {
         let mut s = self.lock();
         if !s.open {
             s.cfg = cfg.clone();
+            s.portable = portable;
+            s.portable_error = None;
             s.capturing = false;
             s.confirm = None;
             s.hotkey_error = None;
@@ -84,6 +93,11 @@ impl Settings {
         s.hotkey_status = hotkey_status;
         s.open = true;
         s.want_focus = true;
+    }
+
+    /// Where the switch wants the settings: next to the exe.
+    pub fn portable(&self) -> bool {
+        self.lock().portable
     }
 
     pub fn is_open(&self) -> bool {
@@ -120,7 +134,9 @@ impl Settings {
             let s = self.lock();
             // Taller while the new version card is on top, so nothing needs scrolling.
             let card = if shows_update(&s) { UPDATE_CARD_H } else { 0.0 };
-            (s.cfg.lang.text().settings_title, 645.0 + card)
+            let hint = if s.portable { AUTOSTART_HINT_H } else { 0.0 };
+            let height = 645.0 + PORTABLE_CARD_H + hint + card;
+            (s.cfg.lang.text().settings_title, height)
         };
         let builder = egui::ViewportBuilder::default()
             .with_title(title)
@@ -162,10 +178,15 @@ impl Settings {
         &self,
         hotkey_status: Option<HotkeyStatus>,
         autostart_error: Option<String>,
+        portable: bool,
+        portable_error: Option<String>,
     ) {
         let mut s = self.lock();
         s.hotkey_status = hotkey_status;
         s.autostart_error = autostart_error;
+        // A move that failed puts the switch back where the settings really are.
+        s.portable = portable;
+        s.portable_error = portable_error;
     }
 }
 
@@ -187,6 +208,11 @@ fn key_cap(ui: &mut egui::Ui, p: &Palette, name: &str) {
 
 /// Height the new version card adds to the window, spacing included.
 const UPDATE_CARD_H: f32 = 72.0;
+
+/// Height the "keep settings next to the program" card adds, spacing included.
+const PORTABLE_CARD_H: f32 = 64.0;
+/// The line under the greyed-out autostart switch.
+const AUTOSTART_HINT_H: f32 = 18.0;
 
 /// The card is hidden at once when the switch goes off, before the checker hears of it.
 fn shows_update(s: &State) -> bool {
@@ -274,6 +300,8 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         hotkey_error,
         hotkey_status,
         autostart_error,
+        portable,
+        portable_error,
         pending: changes,
         want_focus: _,
         palette,
@@ -355,7 +383,14 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         ui.label(egui::RichText::new(t.auto_show_hint).size(12.0).weak());
     });
     card(ui, p, |ui| {
-        changes.autostart |= toggle(ui, &mut cfg.autostart, t.autostart).changed();
+        if *portable {
+            // Shown off and greyed out; the saved choice is back when portable is left.
+            ui.spacing_mut().item_spacing.y = 2.0;
+            ui.add_enabled_ui(false, |ui| toggle(ui, &mut false, t.autostart));
+            ui.label(egui::RichText::new(t.autostart_portable).size(12.0).weak());
+        } else {
+            changes.autostart |= toggle(ui, &mut cfg.autostart, t.autostart).changed();
+        }
     });
     if let Some(e) = autostart_error {
         ui.colored_label(error, e.as_str());
@@ -365,6 +400,14 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
         changes.updates |= toggle(ui, &mut cfg.check_updates, t.check_updates).changed();
         ui.label(egui::RichText::new(t.check_updates_hint).size(12.0).weak());
     });
+    card(ui, p, |ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        changes.portable |= toggle(ui, portable, t.portable).changed();
+        ui.label(egui::RichText::new(t.portable_hint).size(12.0).weak());
+    });
+    if let Some(e) = portable_error {
+        ui.colored_label(error, e.as_str());
+    }
 
     group(ui, t.language);
     card(ui, p, |ui| {
@@ -388,8 +431,12 @@ fn contents(ui: &mut egui::Ui, s: &mut State) {
             project_link(ui, t.project_page);
         });
     });
-    changes.any |=
-        changes.hook || changes.hotkey || changes.autostart || changes.lang || changes.updates;
+    changes.any |= changes.hook
+        || changes.hotkey
+        || changes.autostart
+        || changes.lang
+        || changes.updates
+        || changes.portable;
 }
 
 const PROJECT_URL: &str = "https://github.com/kholye/shelve";
@@ -555,7 +602,7 @@ mod tests {
         // Bug: the window stayed in the old theme until the mouse moved over it.
         // A headless egui keeps a never-painted viewport's repaint request pending, so
         // only the decision is tested: `show` repaints the window when this says true.
-        let settings = Settings::new(&Config::default());
+        let settings = Settings::new(&Config::default(), false);
         let palette = |dark| crate::theme::palette(dark, [0x0F, 0x6C, 0xBD]);
         assert!(!settings.set_inputs(palette(false), None), "same palette");
         assert!(settings.set_inputs(palette(true), None));
@@ -564,7 +611,7 @@ mod tests {
 
     #[test]
     fn a_found_release_repaints_the_open_settings_window() {
-        let settings = Settings::new(&Config::default());
+        let settings = Settings::new(&Config::default(), false);
         let palette = crate::theme::palette(false, [0x0F, 0x6C, 0xBD]);
         let release = Release {
             version: "9.0.0".into(),
