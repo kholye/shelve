@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - Portable mode: with a `shelve.json` file next to `shelve.exe`, the settings are kept in that file, and Shelve writes nothing to `%APPDATA%` or the registry. It is turned on by "Keep settings next to the program" under Behavior in the settings, or by putting an empty `shelve.json` beside the exe. Run from a flash drive this way, Shelve leaves no files or registry entries of its own on the computer.
 - Turning portable mode on moves the settings from `%APPDATA%\shelve` next to the exe, removes that folder if nothing else is in it, and takes Shelve out of autostart. Turning it off moves the settings back and restores autostart if it was on.
